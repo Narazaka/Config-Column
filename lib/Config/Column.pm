@@ -40,11 +40,11 @@ Config::Column - simply packages input and output of "config" / "BBS log" file w
 	);
 	
 	# Read data from MAIN file.
-	my $data = $ccmain->readdata;
+	my $data = $ccmain->read_data;
 	# Add new data.
 	push @$data,{subject => 'YATTA!', date => '2012/03/06T23:33:00+09:00', value => 'All tests passed!'};print $data;
 	# Write data to MAIN file.
-	$ccmain->writedata($data);
+	$ccmain->write_data($data);
 	# Write header to SUB file
 	open my $fh,'+<:encoding(utf8)','subfile.txt';
 	flock $fh,2;
@@ -52,7 +52,7 @@ Config::Column - simply packages input and output of "config" / "BBS log" file w
 	seek $fh,0,0;
 	print $fh 'Single line diary?',"\n";
 	# Add data to SUB file. Don't close and don't truncate $fh.
-	$ccsub->writedata($data,$fh,1,1);
+	$ccsub->write_data($data,$fh,1,1);
 	print $fh 'The end of the worl^h^h^h^hfile';
 	close $fh;
 
@@ -158,7 +158,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	5	English	isDifficult
 	
 	 |
-	 | readdata()
+	 | read_data()
 	 V
 	
 	$datalist = [
@@ -171,7 +171,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	];
 	
 	 |              ^
-	 | writedata()  | readdata()
+	 | write_data()  | read_data()
 	 V              |
 	
 	# data file
@@ -217,19 +217,18 @@ sub new{
 		order => $order,
 		delimiter => $delimiter,
 		index => $index,
-		linedelimiter => $linedelimiter,
-		writeorder => _setwriteorder($order,$delimiter,$linedelimiter)
+		linedelimiter => $linedelimiter
 	},$package;
 }
 
 =head2 Methods
 
-=head3 adddatalast()
+=head3 add_data_last()
 
 This method adds data records to the data file after previous data in the file.
 Indexes of these data records are automatically setted by reading the data file before.
 
-	$cc->adddatalast($data,$fh,$fhflag);
+	$cc->add_data_last($data,$fh,$fhflag);
 
 	my $data = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
@@ -249,22 +248,22 @@ Fail > first: false (return;)
 
 =cut
 
-sub adddatalast{
+sub add_data_last{
 	my $self = shift;
 	my $datalist = shift;
 	my $fh = shift;
 	my $fhflag = shift;
 	$datalist = [$datalist] if ref $datalist eq 'HASH';
 	my $datanum;
-	($datanum,$fh) = $self->readdatanum($fh,1);
-	return $self->adddata($datalist,$datanum + 1,$fh,$fhflag);
+	($datanum,$fh) = $self->read_data_num($fh,1);
+	return $self->add_data($datalist,$datanum + 1,$fh,$fhflag);
 }
 
-=head3 adddata()
+=head3 add_data()
 
 This method adds data records to the data file.
 
-	$cc->adddata($datalist,$startindex,$fh,$fhflag);
+	$cc->add_data($datalist,$startindex,$fh,$fhflag);
 
 	my $datalist = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
@@ -285,7 +284,7 @@ Fail > first: false (return;)
 
 =cut
 
-sub adddata{
+sub add_data{
 	my $self = shift;
 	my $datalist = shift;
 	my $startindex = shift;
@@ -298,17 +297,17 @@ sub adddata{
 		flock $fh,2;
 		seek $fh,0,2;
 	}
-	$self->{writeorder}->($fh,$datalist,$startindex);
+	$self->_write_order($fh,$datalist,$startindex);
 	close $fh unless $fhflag;
 	return $fhflag ? (1,$fh) : 1;
 }
 
-=head3 writedata()
+=head3 write_data()
 
 This method writes data records to the data file.
 Before writing data, the contents of the data file will be erased.
 
-	$cc->writedata($datalist,$fh,$fhflag,$noempty);
+	$cc->write_data($datalist,$fh,$fhflag,$noempty);
 
 	my $datalist = [
 		{title => "hoge",value => "huga"},
@@ -330,7 +329,7 @@ Fail > first: false (return;)
 
 =cut
 
-sub writedata{
+sub write_data{
 	my $self = shift;
 	my $datalist = shift;
 	my $fh = shift;
@@ -347,16 +346,16 @@ sub writedata{
 		truncate $fh,0;
 		seek $fh,0,0;
 	}
-	return $self->adddata($datalist,$self->{index},$fh,$fhflag);
+	return $self->add_data($datalist,$self->{index},$fh,$fhflag);
 }
 
 =begin comment
 
-#=head3 writedatarange()
+#=head3 write_data_range()
 
 範囲内のデータをファイルに書き出す。
 
-	$cc->writedatarange($datalist,$startindex,$endindex,$fh,$fhflag);
+	$cc->write_data_range($datalist,$startindex,$endindex,$fh,$fhflag);
 
 	my $datalist = [
 		{title => "hoge",value => "huga"},
@@ -378,7 +377,7 @@ sub writedata{
 
 =begin comment
 
-sub writedatarange{
+sub write_data_range{
 	my $self = shift;
 	my $datalist = shift;
 	my $startindex = shift;
@@ -403,18 +402,18 @@ sub writedatarange{
 			splice @$datalist,$endindex + 1;
 		}
 	}
-	return $self->adddata($datalist,$startindex,$fh,$fhflag);
+	return $self->add_data($datalist,$startindex,$fh,$fhflag);
 }
 
 =end comment
 
 =cut
 
-=head3 readdata()
+=head3 read_data()
 
 This method reads data records from the data file.
 
-	$cc->readdata($fh,$fhflag);
+	$cc->read_data($fh,$fhflag);
 
 	my $fh; # file handle (can omit)
 	my $fhflag = 1; # if true, file handle will not be closed (can omit)
@@ -429,7 +428,7 @@ Fail > first: false (return;)
 
 =cut
 
-sub readdata{
+sub read_data{
 	my $self = shift;
 	my $fh = shift;
 	my $data;
@@ -439,7 +438,7 @@ sub readdata{
 		flock $fh,2;
 		seek $fh,0,0;
 	}
-	local $/ = $self->{linedelimiter} if $self->{linedelimiter};
+	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
 	if($self->{delimiter}){
 		my $indexcolumn = -1;
 		my @key = @{$self->{order}};
@@ -478,11 +477,11 @@ sub readdata{
 	return $fhflag ? ($data,$fh) : $data;
 }
 
-=head3 readdatanum()
+=head3 read_data_num()
 
 This method reads data record's last index number from the data file.
 
-	$cc->readdatanum($fh,$fhflag);
+	$cc->read_data_num($fh,$fhflag);
 
 	my $fh; # file handle (can omit)
 	my $fhflag = 1; # if true, file handle will not be closed (can omit)
@@ -497,7 +496,7 @@ Fail > first: false (return;)
 
 =cut
 
-sub readdatanum{
+sub read_data_num{
 	my $self = shift;
 	my $fh = shift;
 	my $fhflag = shift;
@@ -506,7 +505,7 @@ sub readdatanum{
 		flock $fh,2;
 		seek $fh,0,0;
 	}
-	local $/ = $self->{linedelimiter} if $self->{linedelimiter};
+	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
 	my $datanum = $self->{index} - 1;
 	if($self->{delimiter}){
 		my $indexcolumn = -1;
@@ -534,9 +533,9 @@ sub readdatanum{
 
 =begin comment
 
-#=head3 _setwriteorder()
+#=head3 _write_order()
 
-	$cc->_setwriteorder($order,$delimiter,$linedelimiter);
+	$cc->_write_order($order,$delimiter,$linedelimiter);
 	$order = [1 title summary];
 	$delimiter = "\n";
 	$linedelimiter = "\n";
@@ -545,32 +544,33 @@ sub readdatanum{
 
 =cut
 
-sub _setwriteorder{
-	my $order = shift;
-	my $delimiter = shift;
-	my $linedelimiter = shift;
-	if($delimiter){
-		return sub{
-			my $fh = shift;
-			my $datalist = shift;
-			my $index = shift;
-			local $/ = $linedelimiter if $linedelimiter;
-			for my $data (@$datalist){
-				print $fh (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @$order),$/;
-				$index ++;
-			}
-		};
-	}else{
-		return sub{
-			my $fh = shift;
-			my $datalist = shift;
-			my $index = shift;
-			local $/ = $linedelimiter if $linedelimiter;
-			for my $data (@$datalist){
-				print $fh (map {$_ % 2 ? $order->[$_] eq 1 ? $index : defined $data->{$order->[$_]} ? $data->{$order->[$_]} : '' : $order->[$_]} (0..$#{$order})),$/;
-				$index ++;
-			}
-		};
+sub _write_order{defined $_[0]->{delimiter} && $_[0]->{delimiter} ne '' ? goto &_write_order_has_delimiter : goto &_write_order_no_delimiter}
+
+sub _write_order_has_delimiter{
+	my $self = shift;
+	my $fh = shift;
+	my $datalist = shift;
+	my $index = shift;
+	my $delimiter = $self->{delimiter};
+	my @order = @{$self->{order}};
+	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
+	for my $data (@$datalist){
+		print $fh (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @order),$/;
+		$index ++;
+	}
+}
+
+sub _write_order_no_delimiter{
+	my $self = shift;
+	my $fh = shift;
+	my $datalist = shift;
+	my $index = shift;
+	my $delimiter = $self->{delimiter};
+	my @order = @{$self->{order}};
+	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
+	for my $data (@$datalist){
+		print $fh (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
+		$index ++;
 	}
 }
 
