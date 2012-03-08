@@ -5,7 +5,7 @@ our $VERSION = '1.00';
 
 =head1 NAME
 
-Config::Column - simply packages config/log file IO divided by any delimiter.
+Config::Column - simply packages input and output of "config" / "BBS log" file whose records are separated by any delimiter.
 
 =head1 SYNOPSIS
 
@@ -56,54 +56,107 @@ Config::Column - simply packages config/log file IO divided by any delimiter.
 
 =head1 INTRODUCTION
 
-This module generalizes the list of keys and delimiters that is common in "config" / "BBS log" file format and package-izes data list input and output of these files.
+This module generalizes the list of keys and delimiters that is common in "config" / "BBS log" file format and packageizes data list input and output of these files.
 
-扱うデータリストは単純なキーとデータの組み合わせでできた各1データのハッシュのリストである。
+It treats data list as simple array reference of hash references.
 
 	my $datalist = [
-		{}, # 最初のインデックスが1(インデックスのシフトが1)の場合、0番目に空の情報が入っているとして扱われる。
+		{}, # If the first index for data list (see below section) is 1, 0th data is empty.
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
 	];
 
-その単純なデータリストの操作は基本的なPerlの操作に任せることにしてそのフォーマットの入出力のみを司ることにする。
+It manages only IO of that data list format and leaves data list manipulating to basic Perl operation.
 
 =head1 DESCRIPTION
 
-=head2 new
+=head2 Constructor
 
-=head3 デリミタを全て同じにする場合(delimiterを必ず記述する)
-
-	my $cc = Config::Column->new(
-		'filename.dat', # データファイル
-		'utf8', # データファイルの文字コード
-		[qw(1 author id title date summary)], # キー名のリスト *order
-		"\t", # デリミタ(必須)
-		1, # インデックスのシフト(省略可能 省略した場合0(インデックスは0から)が使われる。) *index
-		"\n" # 行デリミタ(省略可能 省略した場合Perlデフォルト(おそらく"\n")が使われる。)
-	);
-
-orderは各キーの名前
-
-indexは最初のデータナンバー(0または1からはじめるなど。デフォルトは0)
-
-=head3 デリミタを違える場合(delimiterは必ず空)
+=head3 new()
 
 	my $cc = Config::Column->new(
-		'filename.dat', # データファイル
-		'utf8', # データファイルの文字コード
-		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...] *order
-		"", # デリミタ(必ず空)
-		1, # インデックスのシフト(省略可能 省略した場合0(インデックスは0から)が使われる。) *index
-		"\n" # 行デリミタ(省略可能 省略した場合Perlデフォルト(おそらく"\n")が使われる。)
+		$datafile, # the data file path
+		$encoding, # character encoding of the data file
+		$order, # the "order" (see below section) (ARRAY REFERENCE)
+		$delimiter, # delimiter that separates data column
+		$indexshift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
+		$linedelimiter # delimiter that separates data record ("lines")(can omit, and use Perl default (may be $/ == "\n"))
 	);
 
-orderは偶数番目がデリミタ(最初と最後も)、奇数番目がキーの名前
+C<$indexshift> is 0 or 1 in general.
+For example, if C<$indexshift == 1>, you can get first data record by accessing to C<< $datalist->[1] >>, and C<< $datalist->[0] >> is empty.
 
-indexは最初のデータナンバー(0または1からはじめるなど。デフォルトは0)
+There is two types of definition of C<$order> and C<$delimiter> for 2 following case.
 
-=head2 Methods
+=over
+
+=item single delimiter (You must define delimiter.)
+
+	my $cc = Config::Column->new(
+		'./filename.dat', # the data file path
+		'utf8', # character encoding of the data file
+		[qw(1 author id title date summary)], # the "order" [keys]
+		"\t", # You MUST define delimiter.
+		1, # first index for data list
+		"\n" # delimiter that separates data record
+	);
+
+In this case, "order" is names (hash keys) of each data column.
+
+It is for data formats such as tab/comma separated data.
+
+=item multiple delimiters (Never define delimiter.)
+
+	my $cc = Config::Column->new(
+		'./filename.dat', # the data file path
+		'utf8', # character encoding of the data file
+		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...]
+		undef, # NEVER define delimiter (or omit).
+		1, # first index for data list
+		"\n" # delimiter that separates data record
+	);
+
+In this case, "order" is names (hash keys) of each data column and delimiters.
+
+C<$order>'s 0,2,4...th (even) elements are delimiter, and 1,3,5...th (odd) elements are names (hash keys).
+
+It is for data formats such as ...
+
+=over
+
+=item C<['', 1, ' [', subject, '] : ', date, ' : ', article]>
+
+	1 [This is the subject] : 2012/02/07 : Article is there. HAHAHA!
+	2 [Easy to read] : 2012/02/07 : Tab separated data is for only computers.
+
+=item C<< ['', thread_number, '.dat<>', subject, ' (', res_number, ')'] # subject.txt (bracket delimiter is errorous) >>
+
+	1325052927.dat<>ぬるぽのガイドライン 149ぬるぽ (988)
+	1325387590.dat<>【巨大文字】お断りだのガイドラインPart112【AA】 (444)
+	1318831084.dat<>スカッっとするコピペを貼るスレ　32スカッシュ (904)
+	1321698127.dat<>死亡フラグのガイドライン　18フラグ目 (159)
+
+=back
+
+=back
+
+=begin comment
+
+#=head3 Definition of delimiters
+
+C<$delimiter> is compiled to regular expressions finally.
+
+In case of single delimiter,
+
+	my @column = split /$delimiter/,$recordline;
+
+In case of multiple delimiters, C<$linedelimiter> is also compiled to regular expressions.
+
+	my $lineregexpstr = '^'.(join '(.*?)',map {quotemeta} @delimiters) . '(?:' . quotemeta($linedelimiter) . ')?$';
+	my $lineregexp = qr/$lineregexpstr/;
+
+=end comment
 
 =cut
 
@@ -129,19 +182,30 @@ sub new{
 	},$package;
 }
 
+=head2 Methods
+
 =head3 adddatalast()
 
-データをそれまでのデータに続くものとしてファイルに追記する。インデックスはファイルから最後のインデックスを自動的に読んで使う。
+This method adds data records to the data file after previous data in the file.
+Indexes of these data records are automatically setted by reading the data file before.
 
 	$cc->adddatalast($data,$fh,$fhflag);
 
-	my $data = {title => "hoge",value => "huga"} || [...]; # 1データのハッシュリファレンスか、複数データの配列リファレンスが許される。
-	my $fh; # 省略可能。ファイルハンドル。
-	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
+	my $data = {title => "hoge",value => "huga"} || [
+		{title => "hoge",value => "huga"},
+		{title => "hoge2",value => "huga"},
+		{title => "hoge3",value => "huga"},
+	]; # hash reference of single data record or array reference of hash references of multiple data records
+	my $fh; # file handle (can omit)
+	my $fhflag = 1; # if true, file handle will not be closed (can omit)
 
-与えられたファイルハンドルのファイルポインタが先頭でないなら、その位置から書き出します。
+If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and adds data from the place current file pointer points not from the head of file.
 
-成功なら第一返値に1、$fhflagが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
+Return value:
+
+Succeed > first: 1 , second: (if C<$fhflag> is true) file handle
+
+Fail > first: false (return;)
 
 =cut
 
@@ -158,7 +222,7 @@ sub adddatalast{
 
 =head3 adddata()
 
-データをファイルに書き出す。
+This method adds data records to the data file.
 
 	$cc->adddata($datalist,$startindex,$fh,$fhflag);
 
@@ -166,14 +230,18 @@ sub adddatalast{
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
-	];# 1データのハッシュリファレンスか、複数データの配列リファレンスが許される。
-	my $startindex = 12; # 書き出すデータリストの最初のインデックス。インデックスがいらない場合省略可能。
-	my $fh; # 省略可能。ファイルハンドル。
-	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
+	]; # hash reference of single data record or array reference of hash references of multiple data records
+	my $startindex = 12; # first index of the data record (can omit if you don't want index numbers)
+	my $fh; # file handle (can omit)
+	my $fhflag = 1; # if true, file handle will not be closed (can omit)
 
-与えられたファイルハンドルのファイルポインタが先頭でないなら、その位置から書き出します。
+If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and adds data from the place current file pointer points not from the head of file.
 
-成功なら第一返値に1、$fhflagが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
+Return value:
+
+Succeed > first: 1 , second: (if C<$fhflag> is true) file handle
+
+Fail > first: false (return;)
 
 =cut
 
@@ -197,7 +265,8 @@ sub adddata{
 
 =head3 writedata()
 
-データをファイルに書き出す。
+This method writes data records to the data file.
+Before writing data, the contents of the data file will be erased.
 
 	$cc->writedata($datalist,$fh,$fhflag,$noempty);
 
@@ -205,14 +274,19 @@ sub adddata{
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
-	];# 複数データの配列リファレンスのみ許される。
-	my $fh; # 省略可能。ファイルハンドル。
-	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
-	my $noempty = 1; # 真値を与えればファイルを空にせず、与えられたファイルハンドルのファイルポインタが先頭でないなら、その位置から書き出します。
+	]; # array reference of hash references of multiple data records
+	my $fh; # file handle (can omit)
+	my $fhflag = 1; # if true, file handle will not be closed (can omit)
+	my $noempty = 1; # see below
 
-ファイルを空にしてから新たにデータを書き出します。
+If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle.
+If C<$noempty> is true, the contents of the data file will not be erased, and writes data from the place current file pointer points not from the head of file.
 
-成功なら第一返値に1、$fhflagが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
+Return value:
+
+Succeed > first: 1 , second: (if C<$fhflag> is true) file handle
+
+Fail > first: false (return;)
 
 =cut
 
@@ -298,16 +372,20 @@ sub writedatarange{
 
 =head3 readdata()
 
-データをファイルから読み出す。
+This method reads data records from the data file.
 
 	$cc->readdata($fh,$fhflag);
 
-	my $fh; # 省略可能。ファイルハンドル。
-	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
+	my $fh; # file handle (can omit)
+	my $fhflag = 1; # if true, file handle will not be closed (can omit)
 
-与えられたファイルハンドルのファイルポインタが先頭でないなら、その位置から読み出します。
+If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and reads data from the place current file pointer points not from the head of file.
 
-成功なら第一返値にデータリストのリファレンス、$fhflagが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
+Return value:
+
+Succeed > first: data list (array reference of hash references) , second: (if C<$fhflag> is true) file handle
+
+Fail > first: false (return;)
 
 =cut
 
@@ -318,8 +396,8 @@ sub readdata{
 	my $fhflag = shift;
 	unless(ref $fh eq 'GLOB'){
 		$self->{encoding} ? open $fh,"+<:encoding($self->{encoding})",$self->{filename} : open $fh,'+<',$self->{filename} or return;
-		seek $fh,0,0;
 		flock $fh,2;
+		seek $fh,0,0;
 	}
 	local $/ = $self->{linedelimiter} if $self->{linedelimiter};
 	if($self->{delimiter}){
@@ -362,14 +440,20 @@ sub readdata{
 
 =head3 readdatanum()
 
-データをファイルから読む操作を省略し、そのインデックスのみを数える。
+This method reads data record's last index number from the data file.
 
 	$cc->readdatanum($fh,$fhflag);
 
-	my $fh; # 省略可能。ファイルハンドル。
-	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
+	my $fh; # file handle (can omit)
+	my $fhflag = 1; # if true, file handle will not be closed (can omit)
 
-成功なら第一返値にデータリストの最大のインデックスまたはデータ数、$fhflagが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
+If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and reads data from the place current file pointer points not from the head of file.
+
+Return value:
+
+Succeed > first: last index , second: (if C<$fhflag> is true) file handle
+
+Fail > first: false (return;)
 
 =cut
 
@@ -379,10 +463,9 @@ sub readdatanum{
 	my $fhflag = shift;
 	unless(ref $fh eq 'GLOB'){
 		$self->{encoding} ? open $fh,"+<:encoding($self->{encoding})",$self->{filename} : open $fh,'+<',$self->{filename} or return;
-		seek $fh,0,0;
 		flock $fh,2;
+		seek $fh,0,0;
 	}
-	seek $fh,0,0;
 	local $/ = $self->{linedelimiter} if $self->{linedelimiter};
 	my $datanum = $self->{index} - 1;
 	if($self->{delimiter}){
@@ -465,7 +548,11 @@ For example, if you want to delete 3,6 and 8th element in data list completely, 
 
 	splice @$datalist,$_,1 for sort {$b <=> $a} qw(3 6 8);
 
-So, if you want more smart OO, it will be better to use another modules that wraps naked array or file handle in OO (such as Object::Array ... etc?), or create Config::Column::OO etc. which inherit this module and can use methods pop, shift, splice, delete, etc.
+So, if you want more smart OO, it will be better to use another modules that wraps naked array or file handle in OO (such as Object::Array ... etc?), or create Config::Column::OO etc. which inherits this module and can use methods pop, shift, splice, delete, etc.
+
+=head1 TODO
+
+Odd Engrish
 
 =head1 AUTHOR
 
