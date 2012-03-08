@@ -1,7 +1,8 @@
 Config::Column
 ===============================================================================
 
-Config::Column simply packages config/log file IO divided by any delimiter.
+Config::Column simply packages input and output of "config" / "BBS log" file
+whose records are separated by any delimiter.
 
 ===============================================================================
 
@@ -14,7 +15,7 @@ INSTALLATION
 	make test
 	make install
 	
-	with Strawberry Perl for Windows
+	or with Strawberry Perl for Windows
 	
 	perl Makefile.PL
 	dmake
