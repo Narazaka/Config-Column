@@ -3,6 +3,8 @@ use utf8;
 
 our $VERSION = '1.00';
 
+=encoding utf8
+
 =head1 NAME
 
 Config::Column - simply packages input and output of "config" / "BBS log" file whose records are separated by any delimiter.
@@ -77,7 +79,7 @@ It manages only IO of that data list format and leaves data list manipulating to
 
 	my $cc = Config::Column->new(
 		$datafile, # the data file path
-		$encoding, # character encoding of the data file
+		$encoding, # character encoding of the data file (PerlIO ":encoding($encoding)")
 		$order, # the "order" (see below section) (ARRAY REFERENCE)
 		$delimiter, # delimiter that separates data column
 		$indexshift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
@@ -140,6 +142,45 @@ It is for data formats such as ...
 =back
 
 =back
+
+=head4 Index column
+
+The name "1" in C<$order> means the index of data records.
+
+If the name "1" exists in C<$order>, integer in the index column will be used as array references' index.
+
+	$delimiter = "\t";
+	$order = [1,somedata1,somedata2];
+	
+	# data file
+	1	somedata	other
+	2	foobar	2000
+	3	hoge	piyo
+	5	English	isDifficult
+	
+	 |
+	 | readdata()
+	 V
+	
+	$datalist = [
+		{}, # 0
+		{somedata1 => 'somedata', somedata2 => 'other'}, # 1
+		{somedata1 => 'foobar', somedata2 => '2000'}, # 2
+		{somedata1 => 'hoge', somedata2 => 'piyo'}, # 3
+		{}, # 4
+		{somedata1 => 'English', somedata2 => 'isDifficult'}, # 5
+	];
+	
+	 |              ^
+	 | writedata()  | readdata()
+	 V              |
+	
+	# data file
+	1	somedata	other
+	2	foobar	2000
+	3	hoge	piyo
+	4		
+	5	English	isDifficult
 
 =begin comment
 
