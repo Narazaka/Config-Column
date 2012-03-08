@@ -134,10 +134,9 @@ It is for data formats such as ...
 
 =item C<< ['', thread_number, '.dat<>', subject, ' (', res_number, ')'] # subject.txt (bracket delimiter is errorous) >>
 
-	1325052927.dat<>ぬるぽのガイドライン 149ぬるぽ (988)
-	1325387590.dat<>【巨大文字】お断りだのガイドラインPart112【AA】 (444)
-	1318831084.dat<>スカッっとするコピペを貼るスレ　32スカッシュ (904)
-	1321698127.dat<>死亡フラグのガイドライン　18フラグ目 (159)
+	1325052927.dat<>Nurupo (988)
+	1325387590.dat<>OKOTOWARI!!!!!! Part112 [AA] (444)
+	1321698127.dat<>Marked For Death 18 (159)
 
 =back
 
