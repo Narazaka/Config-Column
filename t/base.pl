@@ -26,6 +26,7 @@ sub testmulticond{
 	my $encoding = shift;
 	my $order = shift;
 	my $delimiter = shift;
+	note('type '.$datafilename);
 	for my $index (0,1,'',undef){
 		for my $linedelimiter ("\n","\r","\0",'|-|',':_','',undef){
 			my $datafile = $datafilename .
@@ -38,7 +39,6 @@ sub testmulticond{
 }
 
 sub testmain{
-	ok(1,'-- set start');
 	my $initdatafile = shift;
 	my $datafile = shift;
 	my $encoding = shift;
@@ -46,13 +46,14 @@ sub testmain{
 	my $delimiter = shift;
 	my $index = shift;
 	my $linedelimiter = shift;
+	note('-- set start');
 	my $sdata = initdata($initdatafile);
 	is(ref $sdata,'ARRAY','sample data loaded.');
 	unshift @$sdata,{} if defined $index && $index eq 1;
 	is($#$sdata,2+(defined $index && $index =~ /^\d+$/ ? $index : 0),'sample data condition.');
 	my $cc = Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,$index,$linedelimiter);
 	$index = 0 unless defined $index && $index =~ /^\d+$/;
-	ok(defined $cc,'new()');
+	isa_ok($cc,'Config::Column','new()');
 	is($cc->writedata($sdata),1,'writedata(sample data)');
 	my $data = $cc->readdata();
 	is(ref $data,'ARRAY','readdata()');
@@ -120,7 +121,7 @@ sub testmain{
 	my $data5 = $cc->readdata();
 	is(ref $data5,'ARRAY','readdata()');
 	is($data5->[2+$index]->{name},'編集','data check');
-	ok(1,'-- set end');
+	note('-- set end');
 }
 
 1;
