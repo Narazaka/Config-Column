@@ -170,9 +170,9 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 		{somedata1 => 'English', somedata2 => 'isDifficult'}, # 5
 	];
 	
-	 |              ^
+	 |               ^
 	 | write_data()  | read_data()
-	 V              |
+	 V               |
 	
 	# data file
 	1	somedata	other
