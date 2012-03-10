@@ -9,7 +9,7 @@ our $set;
 
 my $initdatafile = $set->{datafile};
 my $datafilename = 'delim_order-has1';
-my $encoding = 'utf8';
+my $encoding = ':encoding(utf8)';
 my $order = [qw(1 name subject date value mail url key host addr)];
 my $delimiter = "\t";
 testmulticond($initdatafile,$datafilename,$encoding,$order,$delimiter);
