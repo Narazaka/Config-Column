@@ -22,21 +22,21 @@ Config::Column - simply packages input and output of "config" / "BBS log" file w
 	
 	# MAIN file instance
 	my $ccmain = Config::Column->new(
-		'mainfile.dat', # data file
-		'utf8', # data file encoding
+		'mainfile.dat', # the data file path
+		'utf8', # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)') 
 		$order_delim, # list of key names
-		$delimiter, # delimiter of records
-		1, # index offset
-		"\0" # delimiter of "lines"
+		$delimiter, # delimiter that separates data column
+		1, # first index for data list
+		"\0" # delimiter that separates data record ("lines")
 	);
 	# SUB file (human readable)
 	my $ccsub = Config::Column->new(
 		'', # this can be empty because data file will be opened externally and file handle is passed to this instance
 		'', # same reason
-		$order_nodelim, # list of key names
+		$order_nodelim, # list of key names and delimiters
 		undef, # do not define delimiter
-		1, # index offset
-		# delimiter of "lines" is Default
+		1, # first index for data list
+		# delimiter that separates data record ("lines") is Default
 	);
 	
 	# Read data from MAIN file.
@@ -79,7 +79,7 @@ It manages only IO of that data list format and leaves data list manipulating to
 
 	my $cc = Config::Column->new(
 		$datafile, # the data file path
-		$encoding, # character encoding of the data file (PerlIO ":encoding($encoding)")
+		$layer, # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)') 
 		$order, # the "order" (see below section) (ARRAY REFERENCE)
 		$delimiter, # delimiter that separates data column
 		$indexshift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
@@ -97,7 +97,7 @@ There is two types of definition of C<$order> and C<$delimiter> for 2 following 
 
 	my $cc = Config::Column->new(
 		'./filename.dat', # the data file path
-		'utf8', # character encoding of the data file
+		'utf8', # character encoding of the data file or PerlIO layer
 		[qw(1 author id title date summary)], # the "order" [keys]
 		"\t", # You MUST define delimiter.
 		1, # first index for data list
@@ -112,7 +112,7 @@ It is for data formats such as tab/comma separated data.
 
 	my $cc = Config::Column->new(
 		'./filename.dat', # the data file path
-		'utf8', # character encoding of the data file
+		'utf8', # character encoding of the data file or PerlIO layer
 		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...]
 		undef, # NEVER define delimiter (or omit).
 		1, # first index for data list
@@ -203,7 +203,7 @@ In case of multiple delimiters, C<$linedelimiter> is also compiled to regular ex
 sub new{
 	my $package = shift;
 	my $filename = shift;
-	my $encoding = shift;
+	my $layer = shift;
 	my $order = shift;
 	my $delimiter = shift;
 	my $index = shift;
@@ -213,7 +213,7 @@ sub new{
 	return unless $index =~ /^\d+$/;
 	return bless {
 		filename => $filename,
-		encoding => $encoding,
+		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
 		index => $index,
@@ -292,8 +292,8 @@ sub add_data{
 	my $fhflag = shift;
 	$datalist = [$datalist] if ref $datalist eq 'HASH';
 	unless(ref $fh eq 'GLOB'){
-		my $encoding = $self->{encoding} ? ':encoding('.$self->{encoding}.')' : '';
-		open $fh,'+<'.$encoding,$self->{filename} or open $fh,'>'.$encoding,$self->{filename} or return;
+		my $layer = $self->_layer();
+		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
 		flock $fh,2;
 		seek $fh,0,2;
 	}
@@ -338,8 +338,8 @@ sub write_data{
 	$datalist = [@{$datalist}]; # escape destructive operation
 	splice @$datalist,0,$self->{index};
 	unless(ref $fh eq 'GLOB'){
-		my $encoding = $self->{encoding} ? ':encoding('.$self->{encoding}.')' : '';
-		open $fh,'+<'.$encoding,$self->{filename} or open $fh,'>'.$encoding,$self->{filename} or return;
+		my $layer = $self->_layer();
+		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
 		flock $fh,2;
 	}
 	unless($noempty){
@@ -434,7 +434,7 @@ sub read_data{
 	my $data;
 	my $fhflag = shift;
 	unless(ref $fh eq 'GLOB'){
-		$self->{encoding} ? open $fh,"+<:encoding($self->{encoding})",$self->{filename} : open $fh,'+<',$self->{filename} or return;
+		open $fh,'+<'.$self->_layer(),$self->{filename} or return;
 		flock $fh,2;
 		seek $fh,0,0;
 	}
@@ -501,7 +501,7 @@ sub read_data_num{
 	my $fh = shift;
 	my $fhflag = shift;
 	unless(ref $fh eq 'GLOB'){
-		$self->{encoding} ? open $fh,"+<:encoding($self->{encoding})",$self->{filename} : open $fh,'+<',$self->{filename} or return;
+		open $fh,'+<'.$self->_layer(),$self->{filename} or return;
 		flock $fh,2;
 		seek $fh,0,0;
 	}
@@ -572,6 +572,11 @@ sub _write_order_no_delimiter{
 		print $fh (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
 		$index ++;
 	}
+}
+
+sub _layer{
+	my $self = shift;
+	return $self->{layer} ? $self->{layer} =~ /:/ ? $self->{layer} : ':encoding('.$self->{layer}.')' : '';
 }
 
 1;
