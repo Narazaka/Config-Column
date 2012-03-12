@@ -1,5 +1,7 @@
 package Config::Column;
 use utf8;
+# use strict;
+# use warnings;
 
 our $VERSION = '1.00';
 
@@ -83,11 +85,29 @@ It manages only IO of that data list format and leaves data list manipulating to
 		$order, # the "order" (see below section) (ARRAY REFERENCE)
 		$delimiter, # delimiter that separates data column
 		$indexshift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
-		$linedelimiter # delimiter that separates data record ("lines")(can omit, and use Perl default (may be $/ == "\n"))
+		$linedelimiter, # delimiter that separates data record ("lines")(can omit, and use Perl default (may be $/ == "\n"))
+		$escape # escape character for delimiters (including $linedelimiter)
 	);
+
+or with names,
+
+	my $cc = Config::Column->new({
+		datafile => $datafile,
+		layer => $layer,
+		order => $order,
+		delimiter => $delimiter,
+		indexshift => $indexshift,
+		linedelimiter => $linedelimiter,
+		escape => $escape
+	});
 
 C<$indexshift> is 0 or 1 in general.
 For example, if C<$indexshift == 1>, you can get first data record by accessing to C<< $datalist->[1] >>, and C<< $datalist->[0] >> is empty.
+
+If you have defined C<$escape>, the delimiter strings in the data list are automatically escaped.
+Two or more characters are permitted for C<$escape>, but if you want to use C<$escape>, delimiters should be one character.
+(Escaping delimiters that has two or more characters is not inplemented yet.)
+If you need to escape "long" delimiters, use C<escape()> and C<unescape()> manually.
 
 There is two types of definition of C<$order> and C<$delimiter> for 2 following case.
 
@@ -101,7 +121,8 @@ There is two types of definition of C<$order> and C<$delimiter> for 2 following 
 		[qw(1 author id title date summary)], # the "order" [keys]
 		"\t", # You MUST define delimiter.
 		1, # first index for data list
-		"\n" # delimiter that separates data record
+		"\n", # delimiter that separates data record
+		"\\" # escape character for delimiters
 	);
 
 In this case, "order" is names (hash keys) of each data column.
@@ -116,7 +137,8 @@ It is for data formats such as tab/comma separated data.
 		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...]
 		undef, # NEVER define delimiter (or omit).
 		1, # first index for data list
-		"\n" # delimiter that separates data record
+		"\n", # delimiter that separates data record
+		"\\" # escape character for delimiters
 	);
 
 In this case, "order" is names (hash keys) of each data column and delimiters.
@@ -159,7 +181,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	
 	 |
 	 | read_data()
-	 V
+	 v
 	
 	$datalist = [
 		{}, # 0
@@ -172,7 +194,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	
 	 |               ^
 	 | write_data()  | read_data()
-	 V               |
+	 v               |
 	
 	# data file
 	1	somedata	other
@@ -206,18 +228,29 @@ sub new{
 	my $layer = shift;
 	my $order = shift;
 	my $delimiter = shift;
-	my $index = shift;
+	my $indexshift = shift;
 	my $linedelimiter = shift;
+	my $escape = shift;
 	$package = ref $package || $package;
-	$index = 0 unless $index;
-	return unless $index =~ /^\d+$/;
+	if(ref $filename eq 'HASH'){
+		$layer = $filename->{layer};
+		$order = $filename->{order};
+		$delimiter = $filename->{delimiter};
+		$indexshift = $filename->{indexshift};
+		$linedelimiter = $filename->{linedelimiter};
+		$escape = $filename->{escape};
+		$filename = $filename->{filename};
+	}
+	$indexshift = 0 unless $indexshift;
+	return unless $indexshift =~ /^\d+$/;
 	return bless {
 		filename => $filename,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
-		index => $index,
-		linedelimiter => $linedelimiter
+		indexshift => $indexshift,
+		linedelimiter => $linedelimiter,
+		escape => $escape
 	},$package;
 }
 
@@ -336,7 +369,7 @@ sub write_data{
 	my $fhflag = shift;
 	my $noempty = shift;
 	$datalist = [@{$datalist}]; # escape destructive operation
-	splice @$datalist,0,$self->{index};
+	splice @$datalist,0,$self->{indexshift};
 	unless(ref $fh eq 'GLOB'){
 		my $layer = $self->_layer();
 		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
@@ -346,7 +379,7 @@ sub write_data{
 		truncate $fh,0;
 		seek $fh,0,0;
 	}
-	return $self->add_data($datalist,$self->{index},$fh,$fhflag);
+	return $self->add_data($datalist,$self->{indexshift},$fh,$fhflag);
 }
 
 =begin comment
@@ -391,9 +424,9 @@ sub write_data_range{
 			warn 'startindex is out of index range';
 		}
 	}else{
-		$startindex = $self->{index};
+		$startindex = $self->{indexshift};
 	}
-	splice @$datalist,0,$startindex > $self->{index} ? $startindex : $self->{index};
+	splice @$datalist,0,$startindex > $self->{indexshift} ? $startindex : $self->{indexshift};
 	if($endindex){
 		$endindex = $#$datalist + $endindex + 1 if $endindex < 0;
 		if($endindex > $#$datalist){
@@ -445,7 +478,7 @@ sub read_data{
 		for my $i (0..$#key){
 			if($key[$i] eq 1){$indexcolumn = $i;last;}
 		}
-		my $cnt = $self->{index} - 1;
+		my $cnt = $self->{indexshift} - 1;
 		while(<$fh>){
 			chomp;
 			my @column = split /$self->{delimiter}/;
@@ -463,7 +496,7 @@ sub read_data{
 		for my $i (0..$#key){
 			if($key[$i] eq 1){$indexcolumn = $i;last;}
 		}
-		my $cnt = $self->{index} - 1;
+		my $cnt = $self->{indexshift} - 1;
 		while(<$fh>){
 			chomp;
 			my @column = /$lineregexp/;
@@ -506,7 +539,7 @@ sub read_data_num{
 		seek $fh,0,0;
 	}
 	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
-	my $datanum = $self->{index} - 1;
+	my $datanum = $self->{indexshift} - 1;
 	if($self->{delimiter}){
 		my $indexcolumn = -1;
 		for my $i (0..$#{$self->{order}}){
@@ -530,6 +563,24 @@ sub read_data_num{
 	close $fh unless $fhflag;
 	return $fhflag ? ($datanum,$fh) : $datanum;
 }
+
+=begin comment
+### escaping read
+my $esc = '   ';
+my $escreg = quotemeta $esc;
+my $delim = "\"";
+my $delimreg = quotemeta $delim;
+my $str1 = "start${delim}d:ads?a${esc}${delim}adada${esc}${esc}sda${esc}${delim}${esc}${esc}${esc}${esc}${delim}";
+my $str2 = "start${delim}dadsa?${esc}${esc}${esc}${delim}adada\sda${esc}${esc}${esc}${delim}${delim}end${delim}";
+print '1 : ',$str1,"\n";
+print '2 : ',$str2,"\n";
+#print 'e1: ',eval $str1,"\n";
+#print 'e2: ',eval $str2,"\n";
+$reg = qr/$delimreg((?:$escreg$escreg|$escreg$delimreg|[^$delimreg])*)$delimreg/;
+print $reg,"\n";
+print join ' / ',$str1 =~ $reg,"\n";
+print join ' / ',$str2 =~ $reg,"\n";
+=end comment
 
 =begin comment
 
