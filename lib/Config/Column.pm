@@ -1,7 +1,7 @@
 package Config::Column;
 use utf8;
 
-our $VERSION = '1.00';
+our $VERSION = '0.01';
 
 =encoding utf8
 
