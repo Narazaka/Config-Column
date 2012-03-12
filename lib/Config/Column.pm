@@ -1,7 +1,7 @@
 package Config::Column;
 use utf8;
-#use strict;
-#use warnings;
+# use strict;
+# use warnings;
 
 our $VERSION = '0.01';
 
@@ -161,7 +161,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	
 	 |
 	 | read_data()
-	 V
+	 v
 	
 	$datalist = [
 		{}, # 0
@@ -174,7 +174,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	
 	 |               ^
 	 | write_data()  | read_data()
-	 V               |
+	 v               |
 	
 	# data file
 	1	somedata	other
