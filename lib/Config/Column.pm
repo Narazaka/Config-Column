@@ -206,17 +206,17 @@ sub new{
 	my $layer = shift;
 	my $order = shift;
 	my $delimiter = shift;
-	my $index = shift;
+	my $indexshift = shift;
 	my $linedelimiter = shift;
 	$package = ref $package || $package;
-	$index = 0 unless $index;
-	return unless $index =~ /^\d+$/;
+	$indexshift = 0 unless $indexshift;
+	return unless $indexshift =~ /^\d+$/;
 	return bless {
 		filename => $filename,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
-		index => $index,
+		indexshift => $indexshift,
 		linedelimiter => $linedelimiter
 	},$package;
 }
@@ -336,7 +336,7 @@ sub write_data{
 	my $fhflag = shift;
 	my $noempty = shift;
 	$datalist = [@{$datalist}]; # escape destructive operation
-	splice @$datalist,0,$self->{index};
+	splice @$datalist,0,$self->{indexshift};
 	unless(ref $fh eq 'GLOB'){
 		my $layer = $self->_layer();
 		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
@@ -346,7 +346,7 @@ sub write_data{
 		truncate $fh,0;
 		seek $fh,0,0;
 	}
-	return $self->add_data($datalist,$self->{index},$fh,$fhflag);
+	return $self->add_data($datalist,$self->{indexshift},$fh,$fhflag);
 }
 
 =begin comment
@@ -391,9 +391,9 @@ sub write_data_range{
 			warn 'startindex is out of index range';
 		}
 	}else{
-		$startindex = $self->{index};
+		$startindex = $self->{indexshift};
 	}
-	splice @$datalist,0,$startindex > $self->{index} ? $startindex : $self->{index};
+	splice @$datalist,0,$startindex > $self->{indexshift} ? $startindex : $self->{indexshift};
 	if($endindex){
 		$endindex = $#$datalist + $endindex + 1 if $endindex < 0;
 		if($endindex > $#$datalist){
@@ -445,7 +445,7 @@ sub read_data{
 		for my $i (0..$#key){
 			if($key[$i] eq 1){$indexcolumn = $i;last;}
 		}
-		my $cnt = $self->{index} - 1;
+		my $cnt = $self->{indexshift} - 1;
 		while(<$fh>){
 			chomp;
 			my @column = split /$self->{delimiter}/;
@@ -463,7 +463,7 @@ sub read_data{
 		for my $i (0..$#key){
 			if($key[$i] eq 1){$indexcolumn = $i;last;}
 		}
-		my $cnt = $self->{index} - 1;
+		my $cnt = $self->{indexshift} - 1;
 		while(<$fh>){
 			chomp;
 			my @column = /$lineregexp/;
@@ -506,7 +506,7 @@ sub read_data_num{
 		seek $fh,0,0;
 	}
 	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
-	my $datanum = $self->{index} - 1;
+	my $datanum = $self->{indexshift} - 1;
 	if($self->{delimiter}){
 		my $indexcolumn = -1;
 		for my $i (0..$#{$self->{order}}){
