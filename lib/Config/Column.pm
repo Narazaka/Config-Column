@@ -3,7 +3,7 @@ use utf8;
 # use strict;
 # use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '1.00';
 
 =encoding utf8
 
