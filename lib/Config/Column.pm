@@ -3,13 +3,13 @@ use utf8;
 # use strict;
 # use warnings;
 
-our $VERSION = '1.00';
+our $VERSION = '2.00';
 
 =encoding utf8
 
 =head1 NAME
 
-Config::Column - simply packages input and output of "config" / "BBS log" file whose records are separated by any delimiter.
+Config::Column - simply packages input and output of column oriented data files such as "BBS log file" etc. whose records are separated by any delimiter.
 
 =head1 SYNOPSIS
 
@@ -60,9 +60,16 @@ Config::Column - simply packages input and output of "config" / "BBS log" file w
 
 =head1 INTRODUCTION
 
-This module generalizes the list of keys and delimiters that is common in "config" / "BBS log" file format and packageizes data list input and output of these files.
+This module generalizes input and output of column oriented data files such as "config file" / "BBS log file".
 
-It treats data list as simple array reference of hash references.
+Here is an example of column oriented data format (tab separated data).
+
+	1	title1	new
+	2	title2	second season
+	3	title3	mannerism
+	5	title5	never 4th season
+
+This module treats data list as simple array reference of hash references.
 
 	my $datalist = [
 		{}, # If the first index for data list (see below section) is 1, 0th data is empty.
