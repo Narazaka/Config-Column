@@ -112,9 +112,32 @@ C<$indexshift> is 0 or 1 in general.
 For example, if C<$indexshift == 1>, you can get first data record by accessing to C<< $datalist->[1] >>, and C<< $datalist->[0] >> is empty.
 
 If you have defined C<$escape>, the delimiter strings in the data list are automatically escaped.
-Two or more characters are permitted for C<$escape>, but if you want to use C<$escape>, delimiters should be one character.
-(Escaping delimiters that has two or more characters is not inplemented yet.)
-If you need to escape "long" delimiters, use C<escape()> and C<unescape()> manually.
+Two or more characters are permitted for C<$escape>, but if you want to use C<$escape>, delimiters should not be part of C<$escape>.
+
+	{
+		# orthodox
+		my $escape = "\\";
+		my $delimiter = "\t";
+		my $line_delimiter = "\n";
+	}
+	{
+		# long
+		my $escape = "--";
+		my $delimiter = "//";
+		my $line_delimiter = "||";
+	}
+	{
+		# delimiters are not part of $escape
+		my $escape = "aa";
+		my $delimiter = "aaaa";
+		my $line_delimiter = "\n";
+	}
+	{
+		# FAIL: $delimiter is part of $escape
+		my $escape = "aaaa";
+		my $delimiter = "aa";
+		my $line_delimiter = "\n";
+	}
 
 There is two types of definition of C<$order> and C<$delimiter> for 2 following case.
 
@@ -645,6 +668,8 @@ This module requires no other modules and libraries.
 
 =head1 NOTES
 
+=head2 OOP
+
 This module is written in object-oriented style but treating data by naked array or file handle so you should treat data by procedural style.
 
 For example, if you want to delete 3,6 and 8th element in data list completely, the following code will be required.
@@ -652,6 +677,15 @@ For example, if you want to delete 3,6 and 8th element in data list completely, 
 	splice @$datalist,$_,1 for sort {$b <=> $a} qw(3 6 8);
 
 So, if you want more smart OO, it will be better to use another modules that wraps naked array or file handle in OO (such as Object::Array ... etc?), or create Config::Column::OO etc. which inherits this module and can use methods pop, shift, splice, delete, etc.
+
+=head2 escaping
+
+I think current implement of the regexp of escaping (includes slow (..|..|..)) is not the best.
+
+=head2 For legacy system
+
+Perl <= 5.6.x does not have PerlIO.
+C<$layer> of this module is for character encoding and depends on PerlIO, so you should empty C<$layer> on Perl 5.6.x or older
 
 =head1 TODO
 
