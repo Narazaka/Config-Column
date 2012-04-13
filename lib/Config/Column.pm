@@ -48,15 +48,15 @@ Config::Column - simply packages input and output of column oriented data files 
 	# Write data to MAIN file.
 	$ccmain->write_data($data);
 	# Write header to SUB file
-	open my $fh,'+<:encoding(utf8)','subfile.txt';
-	flock $fh,2;
-	truncate $fh,0;
-	seek $fh,0,0;
-	print $fh 'Single line diary?',"\n";
-	# Add data to SUB file. Don't close and don't truncate $fh.
-	$ccsub->write_data($data,$fh,1,1);
-	print $fh 'The end of the worl^h^h^h^hfile';
-	close $fh;
+	open my $file_handle,'+<:encoding(utf8)','subfile.txt';
+	flock $file_handle,2;
+	truncate $file_handle,0;
+	seek $file_handle,0,0;
+	print $file_handle 'Single line diary?',"\n";
+	# Add data to SUB file. Don't close and don't truncate $file_handle.
+	$ccsub->write_data($data,$file_handle,1,1);
+	print $file_handle 'The end of the worl^h^h^h^hfile';
+	close $file_handle;
 
 =head1 INTRODUCTION
 
@@ -146,7 +146,7 @@ There is two types of definition of C<$order> and C<$delimiter> for 2 following 
 =item single delimiter (You must define delimiter.)
 
 	my $cc = Config::Column->new(
-		'./file_name.dat', # the data file path
+		'./file.dat', # the data file path
 		'utf8', # character encoding of the data file or PerlIO layer
 		[qw(1 author id title date summary)], # the "order" [keys]
 		"\t", # You MUST define delimiter.
@@ -162,7 +162,7 @@ It is for data formats such as tab/comma separated data.
 =item multiple delimiters (Never define delimiter.)
 
 	my $cc = Config::Column->new(
-		'./file_name.dat', # the data file path
+		'./file.dat', # the data file path
 		'utf8', # character encoding of the data file or PerlIO layer
 		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...]
 		undef, # NEVER define delimiter (or omit).
@@ -254,27 +254,30 @@ In case of multiple delimiters, C<$record_delimiter> is also compiled to regular
 
 sub new{
 	my $package = shift;
-	my $file_name = shift;
-	my $layer = shift;
-	my $order = shift;
-	my $delimiter = shift;
-	my $index_shift = shift;
-	my $record_delimiter = shift;
-	my $escape = shift;
 	$package = ref $package || $package;
-	if(ref $file_name eq 'HASH'){
-		$layer = $file_name->{layer};
-		$order = $file_name->{order};
-		$delimiter = $file_name->{delimiter};
-		$index_shift = $file_name->{index_shift};
-		$record_delimiter = $file_name->{record_delimiter};
-		$escape = $file_name->{escape};
-		$file_name = $file_name->{file_name} || $file_name->{filename} || $file_name->{file};
+	my ($file, $layer, $order, $delimiter, $index_shift, $record_delimiter, $escape);
+	if(ref $_[0] eq 'HASH'){
+		my $option = shift;
+		$file = $option->{file} || $option->{file_name} || $option->{filename};
+		$layer = $option->{layer};
+		$order = $option->{order};
+		$delimiter = $option->{delimiter};
+		$index_shift = $option->{index_shift};
+		$record_delimiter = $option->{record_delimiter};
+		$escape = $option->{escape};
+	}else{
+		$file = shift;
+		$layer = shift;
+		$order = shift;
+		$delimiter = shift;
+		$index_shift = shift;
+		$record_delimiter = shift;
+		$escape = shift;
 	}
 	$index_shift = 0 unless $index_shift;
-	return unless $index_shift =~ /^\d+$/;
+	die 'invalid index_shift (not number)' unless $index_shift =~ /^\d+$/;
 	return bless {
-		file_name => $file_name,
+		file => $file,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
@@ -291,21 +294,21 @@ sub new{
 This method adds data records to the data file after previous data in the file.
 Indexes of these data records are automatically setted by reading the data file before.
 
-	$cc->add_data_last($data,$fh,$fhflag);
+	$cc->add_data_last($data,$file_handle,$keep_file_handle);
 
 	my $data = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
 	]; # hash reference of single data record or array reference of hash references of multiple data records
-	my $fh; # file handle (can omit)
-	my $fhflag = 1; # if true, file handle will not be closed (can omit)
+	my $file_handle; # file handle (can omit)
+	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
 
 If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and adds data from the place current file pointer points not from the head of file.
 
 Return value:
 
-Succeed > first: 1 , second: (if C<$fhflag> is true) file handle
+Succeed > first: 1 , second: (if C<$keep_file_handle> is true) file handle
 
 Fail > first: false (return;)
 
@@ -313,20 +316,28 @@ Fail > first: false (return;)
 
 sub add_data_last{
 	my $self = shift;
-	my $data_list = shift;
-	my $fh = shift;
-	my $fhflag = shift;
+	my ($data_list, $file_handle, $keep_file_handle);
+	if(ref $_[0] eq 'HASH'){
+		my $option = shift;
+		$data_list = $option->{data_list};
+		$file_handle = $option->{file_handle} || $option->{fh};
+		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+	}else{
+		$data_list = shift;
+		$file_handle = shift;
+		$keep_file_handle = shift;
+	}
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
 	my $data_num;
-	($data_num,$fh) = $self->read_data_num($fh,1);
-	return $self->add_data($data_list,$data_num + 1,$fh,$fhflag);
+	($data_num,$file_handle) = $self->read_data_num($file_handle,1);
+	return $self->add_data($data_list,$data_num + 1,$file_handle,$keep_file_handle);
 }
 
 =head3 add_data()
 
 This method adds data records to the data file.
 
-	$cc->add_data($data_list,$start_index,$fh,$fhflag);
+	$cc->add_data($data_list,$start_index,$file_handle,$keep_file_handle);
 
 	my $data_list = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
@@ -334,14 +345,14 @@ This method adds data records to the data file.
 		{title => "hoge3",value => "huga"},
 	]; # hash reference of single data record or array reference of hash references of multiple data records
 	my $start_index = 12; # first index of the data record (can omit if you don't want index numbers)
-	my $fh; # file handle (can omit)
-	my $fhflag = 1; # if true, file handle will not be closed (can omit)
+	my $file_handle; # file handle (can omit)
+	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
 
 If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and adds data from the place current file pointer points not from the head of file.
 
 Return value:
 
-Succeed > first: 1 , second: (if C<$fhflag> is true) file handle
+Succeed > first: 1 , second: (if C<$keep_file_handle> is true) file handle
 
 Fail > first: false (return;)
 
@@ -349,20 +360,29 @@ Fail > first: false (return;)
 
 sub add_data{
 	my $self = shift;
-	my $data_list = shift;
-	my $start_index = shift;
-	my $fh = shift;
-	my $fhflag = shift;
-	$data_list = [$data_list] if ref $data_list eq 'HASH';
-	unless(ref $fh eq 'GLOB'){
-		my $layer = $self->_layer();
-		open $fh,'+<'.$layer,$self->{file_name} or open $fh,'>'.$layer,$self->{file_name} or return;
-		flock $fh,2;
-		seek $fh,0,2;
+	my ($data_list, $start_index, $file_handle, $keep_file_handle);
+	if(ref $_[0] eq 'HASH'){
+		my $option = shift;
+		$data_list = $option->{data_list};
+		$start_index = $option->{start_index};
+		$file_handle = $option->{file_handle} || $option->{fh};
+		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+	}else{
+		$data_list = shift;
+		$start_index = shift;
+		$file_handle = shift;
+		$keep_file_handle = shift;
 	}
-	$self->_write_order($fh,$data_list,$start_index);
-	close $fh unless $fhflag;
-	return $fhflag ? (1,$fh) : 1;
+	$data_list = [$data_list] if ref $data_list eq 'HASH';
+	unless(ref $file_handle eq 'GLOB'){
+		my $layer = $self->_layer();
+		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or return;
+		flock $file_handle,2;
+		seek $file_handle,0,2;
+	}
+	$self->_write_order($file_handle,$data_list,$start_index);
+	close $file_handle unless $keep_file_handle;
+	return $keep_file_handle ? (1,$file_handle) : 1;
 }
 
 =head3 write_data()
@@ -370,15 +390,15 @@ sub add_data{
 This method writes data records to the data file.
 Before writing data, the contents of the data file will be erased.
 
-	$cc->write_data($data_list,$fh,$fhflag,$no_empty);
+	$cc->write_data($data_list,$file_handle,$keep_file_handle,$no_empty);
 
 	my $data_list = [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
 	]; # array reference of hash references of multiple data records
-	my $fh; # file handle (can omit)
-	my $fhflag = 1; # if true, file handle will not be closed (can omit)
+	my $file_handle; # file handle (can omit)
+	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
 	my $no_empty = 1; # see below
 
 If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle.
@@ -386,7 +406,7 @@ If C<$no_empty> is true, the contents of the data file will not be erased, and w
 
 Return value:
 
-Succeed > first: 1 , second: (if C<$fhflag> is true) file handle
+Succeed > first: 1 , second: (if C<$keep_file_handle> is true) file handle
 
 Fail > first: false (return;)
 
@@ -394,22 +414,31 @@ Fail > first: false (return;)
 
 sub write_data{
 	my $self = shift;
-	my $data_list = shift;
-	my $fh = shift;
-	my $fhflag = shift;
-	my $no_empty = shift;
+	my ($data_list, $file_handle, $keep_file_handle, $no_empty);
+	if(ref $_[0] eq 'HASH'){
+		my $option = shift;
+		$data_list = $option->{data_list};
+		$file_handle = $option->{file_handle} || $option->{fh};
+		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+		$no_empty = $option->{no_empty};
+	}else{
+		$data_list = shift;
+		$file_handle = shift;
+		$keep_file_handle = shift;
+		$no_empty = shift;
+	}
 	$data_list = [@{$data_list}]; # escape destructive operation
 	splice @$data_list,0,$self->{index_shift};
-	unless(ref $fh eq 'GLOB'){
+	unless(ref $file_handle eq 'GLOB'){
 		my $layer = $self->_layer();
-		open $fh,'+<'.$layer,$self->{file_name} or open $fh,'>'.$layer,$self->{file_name} or return;
-		flock $fh,2;
+		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or return;
+		flock $file_handle,2;
 	}
 	unless($no_empty){
-		truncate $fh,0;
-		seek $fh,0,0;
+		truncate $file_handle,0;
+		seek $file_handle,0,0;
 	}
-	return $self->add_data($data_list,$self->{index_shift},$fh,$fhflag);
+	return $self->add_data($data_list,$self->{index_shift},$file_handle,$keep_file_handle);
 }
 
 =begin comment
@@ -418,7 +447,7 @@ sub write_data{
 
 範囲内のデータをファイルに書き出す。
 
-	$cc->write_data_range($data_list,$start_index,$endindex,$fh,$fhflag);
+	$cc->write_data_range($data_list,$start_index,$endindex,$file_handle,$keep_file_handle);
 
 	my $data_list = [
 		{title => "hoge",value => "huga"},
@@ -427,12 +456,12 @@ sub write_data{
 	];# 複数データの配列リファレンスのみ許される。
 	my $start_index = 2; # 書き出すデータリストの最初のインデックス。0番目のデータから書き出すなら省略可能。
 	my $endindex = 10; # 書き出すデータリストの最後のインデックス。最後のデータまで書き出すなら省略可能。
-	my $fh; # 省略可能。ファイルハンドル。
-	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
+	my $file_handle; # 省略可能。ファイルハンドル。
+	my $keep_file_handle = 1; # 真値を与えればファイルハンドルを維持する。
 
 与えられたファイルハンドルのファイルポインタが先頭でないなら、その位置から書き出します。
 
-成功なら第一返値に1、$fhflagが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
+成功なら第一返値に1、$keep_file_handleが真なら第二返値にファイルハンドルを返す。失敗なら偽を返す。
 
 =end comment
 
@@ -445,8 +474,8 @@ sub write_data_range{
 	my $data_list = shift;
 	my $start_index = shift;
 	my $endindex = shift;
-	my $fh = shift;
-	my $fhflag = shift;
+	my $file_handle = shift;
+	my $keep_file_handle = shift;
 	$data_list = [@{$data_list}]; # escape destructive operation
 	if($start_index){
 		$start_index = $#$data_list + $start_index + 1 if $start_index < 0;
@@ -465,7 +494,7 @@ sub write_data_range{
 			splice @$data_list,$endindex + 1;
 		}
 	}
-	return $self->add_data($data_list,$start_index,$fh,$fhflag);
+	return $self->add_data($data_list,$start_index,$file_handle,$keep_file_handle);
 }
 
 =end comment
@@ -476,16 +505,16 @@ sub write_data_range{
 
 This method reads data records from the data file.
 
-	$cc->read_data($fh,$fhflag);
+	$cc->read_data($file_handle,$keep_file_handle);
 
-	my $fh; # file handle (can omit)
-	my $fhflag = 1; # if true, file handle will not be closed (can omit)
+	my $file_handle; # file handle (can omit)
+	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
 
 If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and reads data from the place current file pointer points not from the head of file.
 
 Return value:
 
-Succeed > first: data list (array reference of hash references) , second: (if C<$fhflag> is true) file handle
+Succeed > first: data list (array reference of hash references) , second: (if C<$keep_file_handle> is true) file handle
 
 Fail > first: false (return;)
 
@@ -493,13 +522,20 @@ Fail > first: false (return;)
 
 sub read_data{
 	my $self = shift;
-	my $fh = shift;
+	my ($file_handle, $keep_file_handle);
+	if(ref $_[0] eq 'HASH'){
+		my $option = shift;
+		$file_handle = $option->{file_handle} || $option->{fh};
+		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+	}else{
+		$file_handle = shift;
+		$keep_file_handle = shift;
+	}
 	my $data;
-	my $fhflag = shift;
-	unless(ref $fh eq 'GLOB'){
-		open $fh,'+<'.$self->_layer(),$self->{file_name} or return;
-		flock $fh,2;
-		seek $fh,0,0;
+	unless(ref $file_handle eq 'GLOB'){
+		open $file_handle,'+<'.$self->_layer(),$self->{file} or return;
+		flock $file_handle,2;
+		seek $file_handle,0,0;
 	}
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
 	if($self->{delimiter}){
@@ -509,7 +545,7 @@ sub read_data{
 			if($key[$i] eq 1){$index_column = $i;last;}
 		}
 		my $cnt = $self->{index_shift} - 1;
-		while(<$fh>){
+		while(<$file_handle>){
 			chomp;
 			my @column = split /$self->{delimiter}/;
 			$index_column >= 0 ? $cnt = $column[$index_column] : $cnt++;
@@ -527,7 +563,7 @@ sub read_data{
 			if($key[$i] eq 1){$index_column = $i;last;}
 		}
 		my $cnt = $self->{index_shift} - 1;
-		while(<$fh>){
+		while(<$file_handle>){
 			chomp;
 			my @column = /$record_regexp/;
 			$index_column >= 0 ? $cnt = $column[$index_column] : $cnt++;
@@ -536,24 +572,24 @@ sub read_data{
 			}
 		}
 	}
-	close $fh unless $fhflag;
-	return $fhflag ? ($data,$fh) : $data;
+	close $file_handle unless $keep_file_handle;
+	return $keep_file_handle ? ($data,$file_handle) : $data;
 }
 
 =head3 read_data_num()
 
 This method reads data record's last index number from the data file.
 
-	$cc->read_data_num($fh,$fhflag);
+	$cc->read_data_num($file_handle,$keep_file_handle);
 
-	my $fh; # file handle (can omit)
-	my $fhflag = 1; # if true, file handle will not be closed (can omit)
+	my $file_handle; # file handle (can omit)
+	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
 
 If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and reads data from the place current file pointer points not from the head of file.
 
 Return value:
 
-Succeed > first: last index , second: (if C<$fhflag> is true) file handle
+Succeed > first: last index , second: (if C<$keep_file_handle> is true) file handle
 
 Fail > first: false (return;)
 
@@ -561,12 +597,19 @@ Fail > first: false (return;)
 
 sub read_data_num{
 	my $self = shift;
-	my $fh = shift;
-	my $fhflag = shift;
-	unless(ref $fh eq 'GLOB'){
-		open $fh,'+<'.$self->_layer(),$self->{file_name} or return;
-		flock $fh,2;
-		seek $fh,0,0;
+	my ($file_handle, $keep_file_handle);
+	if(ref $_[0] eq 'HASH'){
+		my $option = shift;
+		$file_handle = $option->{file_handle} || $option->{fh};
+		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+	}else{
+		$file_handle = shift;
+		$keep_file_handle = shift;
+	}
+	unless(ref $file_handle eq 'GLOB'){
+		open $file_handle,'+<'.$self->_layer(),$self->{file} or return;
+		flock $file_handle,2;
+		seek $file_handle,0,0;
 	}
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
 	my $data_num = $self->{index_shift} - 1;
@@ -575,8 +618,8 @@ sub read_data_num{
 		for my $i (0..$#{$self->{order}}){
 			if($self->{order}->[$i] eq 1){$index_column = $i;last;}
 		}
-		if($index_column < 0){$data_num++ while <$fh>;}
-		else{$data_num = (split /$self->{delimiter}/)[$index_column] while <$fh>;}
+		if($index_column < 0){$data_num++ while <$file_handle>;}
+		else{$data_num = (split /$self->{delimiter}/)[$index_column] while <$file_handle>;}
 		chomp $data_num;
 	}else{
 		my @key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
@@ -587,11 +630,11 @@ sub read_data_num{
 		for my $i (0..$#key){
 			if($key[$i] eq 1){$index_column = $i;last;}
 		}
-		if($index_column < 0){$data_num++ while <$fh>;}
-		else{$data_num = (/$record_regexp/)[$index_column] while <$fh>;}
+		if($index_column < 0){$data_num++ while <$file_handle>;}
+		else{$data_num = (/$record_regexp/)[$index_column] while <$file_handle>;}
 	}
-	close $fh unless $fhflag;
-	return $fhflag ? ($data_num,$fh) : $data_num;
+	close $file_handle unless $keep_file_handle;
+	return $keep_file_handle ? ($data_num,$file_handle) : $data_num;
 }
 
 =begin comment
@@ -629,28 +672,28 @@ sub _write_order{defined $_[0]->{delimiter} && $_[0]->{delimiter} ne '' ? goto &
 
 sub _write_order_has_delimiter{
 	my $self = shift;
-	my $fh = shift;
+	my $file_handle = shift;
 	my $data_list = shift;
 	my $index = shift;
 	my $delimiter = $self->{delimiter};
 	my @order = @{$self->{order}};
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
 	for my $data (@$data_list){
-		print $fh (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @order),$/;
+		print $file_handle (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @order),$/;
 		$index ++;
 	}
 }
 
 sub _write_order_no_delimiter{
 	my $self = shift;
-	my $fh = shift;
+	my $file_handle = shift;
 	my $data_list = shift;
 	my $index = shift;
 	my $delimiter = $self->{delimiter};
 	my @order = @{$self->{order}};
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
 	for my $data (@$data_list){
-		print $fh (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
+		print $file_handle (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
 		$index ++;
 	}
 }
