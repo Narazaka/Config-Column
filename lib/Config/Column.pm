@@ -317,7 +317,7 @@ Fail > first: false (return;)
 sub add_data_last{
 	my $self = shift;
 	my ($data_list, $file_handle, $keep_file_handle);
-	if(ref $_[0] eq 'HASH'){
+	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){
 		my $option = shift;
 		$data_list = $option->{data_list};
 		$file_handle = $option->{file_handle} || $option->{fh};
@@ -361,7 +361,7 @@ Fail > first: false (return;)
 sub add_data{
 	my $self = shift;
 	my ($data_list, $start_index, $file_handle, $keep_file_handle);
-	if(ref $_[0] eq 'HASH'){
+	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){
 		my $option = shift;
 		$data_list = $option->{data_list};
 		$start_index = $option->{start_index};
