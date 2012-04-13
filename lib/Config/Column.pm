@@ -146,7 +146,7 @@ There is two types of definition of C<$order> and C<$delimiter> for 2 following 
 =item single delimiter (You must define delimiter.)
 
 	my $cc = Config::Column->new(
-		'./filename.dat', # the data file path
+		'./file_name.dat', # the data file path
 		'utf8', # character encoding of the data file or PerlIO layer
 		[qw(1 author id title date summary)], # the "order" [keys]
 		"\t", # You MUST define delimiter.
@@ -162,7 +162,7 @@ It is for data formats such as tab/comma separated data.
 =item multiple delimiters (Never define delimiter.)
 
 	my $cc = Config::Column->new(
-		'./filename.dat', # the data file path
+		'./file_name.dat', # the data file path
 		'utf8', # character encoding of the data file or PerlIO layer
 		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...]
 		undef, # NEVER define delimiter (or omit).
@@ -254,7 +254,7 @@ In case of multiple delimiters, C<$record_delimiter> is also compiled to regular
 
 sub new{
 	my $package = shift;
-	my $filename = shift;
+	my $file_name = shift;
 	my $layer = shift;
 	my $order = shift;
 	my $delimiter = shift;
@@ -262,19 +262,19 @@ sub new{
 	my $record_delimiter = shift;
 	my $escape = shift;
 	$package = ref $package || $package;
-	if(ref $filename eq 'HASH'){
-		$layer = $filename->{layer};
-		$order = $filename->{order};
-		$delimiter = $filename->{delimiter};
-		$index_shift = $filename->{index_shift};
-		$record_delimiter = $filename->{record_delimiter};
-		$escape = $filename->{escape};
-		$filename = $filename->{filename};
+	if(ref $file_name eq 'HASH'){
+		$layer = $file_name->{layer};
+		$order = $file_name->{order};
+		$delimiter = $file_name->{delimiter};
+		$index_shift = $file_name->{index_shift};
+		$record_delimiter = $file_name->{record_delimiter};
+		$escape = $file_name->{escape};
+		$file_name = $file_name->{file_name} || $file_name->{filename} || $file_name->{file};
 	}
 	$index_shift = 0 unless $index_shift;
 	return unless $index_shift =~ /^\d+$/;
 	return bless {
-		filename => $filename,
+		file_name => $file_name,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
@@ -356,7 +356,7 @@ sub add_data{
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
 	unless(ref $fh eq 'GLOB'){
 		my $layer = $self->_layer();
-		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
+		open $fh,'+<'.$layer,$self->{file_name} or open $fh,'>'.$layer,$self->{file_name} or return;
 		flock $fh,2;
 		seek $fh,0,2;
 	}
@@ -402,7 +402,7 @@ sub write_data{
 	splice @$data_list,0,$self->{index_shift};
 	unless(ref $fh eq 'GLOB'){
 		my $layer = $self->_layer();
-		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
+		open $fh,'+<'.$layer,$self->{file_name} or open $fh,'>'.$layer,$self->{file_name} or return;
 		flock $fh,2;
 	}
 	unless($no_empty){
@@ -497,7 +497,7 @@ sub read_data{
 	my $data;
 	my $fhflag = shift;
 	unless(ref $fh eq 'GLOB'){
-		open $fh,'+<'.$self->_layer(),$self->{filename} or return;
+		open $fh,'+<'.$self->_layer(),$self->{file_name} or return;
 		flock $fh,2;
 		seek $fh,0,0;
 	}
@@ -564,7 +564,7 @@ sub read_data_num{
 	my $fh = shift;
 	my $fhflag = shift;
 	unless(ref $fh eq 'GLOB'){
-		open $fh,'+<'.$self->_layer(),$self->{filename} or return;
+		open $fh,'+<'.$self->_layer(),$self->{file_name} or return;
 		flock $fh,2;
 		seek $fh,0,0;
 	}
