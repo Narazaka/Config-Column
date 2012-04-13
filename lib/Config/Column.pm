@@ -13,7 +13,7 @@ Config::Column - simply packages input and output of column oriented data files 
 
 =head1 SYNOPSIS
 
-	# Copy the datalist in a tab separated file to readable formatted text file.
+	# Copy the data_list in a tab separated file to readable formatted text file.
 	
 	use utf8;
 	use lib './lib';
@@ -71,7 +71,7 @@ Here is an example of column oriented data format (tab separated data).
 
 This module treats data list as simple array reference of hash references.
 
-	my $datalist = [
+	my $data_list = [
 		{}, # If the first index for data list (see below section) is 1, 0th data is empty.
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
@@ -91,9 +91,9 @@ It manages only IO of that data list format and leaves data list manipulating to
 		$layer, # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)') 
 		$order, # the "order" (see below section) (ARRAY REFERENCE)
 		$delimiter, # delimiter that separates data column
-		$indexshift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
-		$linedelimiter, # delimiter that separates data record ("lines")(can omit, and use Perl default (may be $/ == "\n"))
-		$escape # escape character for delimiters (including $linedelimiter)
+		$index_shift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
+		$record_delimiter, # delimiter that separates data record ("lines")(can omit, and use Perl default (may be $/ == "\n"))
+		$escape # escape character for delimiters (including $record_delimiter)
 	);
 
 or with names,
@@ -103,13 +103,13 @@ or with names,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
-		indexshift => $indexshift,
-		linedelimiter => $linedelimiter,
+		index_shift => $index_shift,
+		record_delimiter => $record_delimiter,
 		escape => $escape
 	});
 
-C<$indexshift> is 0 or 1 in general.
-For example, if C<$indexshift == 1>, you can get first data record by accessing to C<< $datalist->[1] >>, and C<< $datalist->[0] >> is empty.
+C<$index_shift> is 0 or 1 in general.
+For example, if C<$index_shift == 1>, you can get first data record by accessing to C<< $data_list->[1] >>, and C<< $data_list->[0] >> is empty.
 
 If you have defined C<$escape>, the delimiter strings in the data list are automatically escaped.
 Two or more characters are permitted for C<$escape>, but if you want to use C<$escape>, delimiters should not be part of C<$escape>.
@@ -213,7 +213,7 @@ If the name "1" exists in C<$order>, integer in the index column will be used as
 	 | read_data()
 	 v
 	
-	$datalist = [
+	$data_list = [
 		{}, # 0
 		{somedata1 => 'somedata', somedata2 => 'other'}, # 1
 		{somedata1 => 'foobar', somedata2 => '2000'}, # 2
@@ -243,10 +243,10 @@ In case of single delimiter,
 
 	my @column = split /$delimiter/,$recordline;
 
-In case of multiple delimiters, C<$linedelimiter> is also compiled to regular expressions.
+In case of multiple delimiters, C<$record_delimiter> is also compiled to regular expressions.
 
-	my $lineregexpstr = '^'.(join '(.*?)',map {quotemeta} @delimiters) . '(?:' . quotemeta($linedelimiter) . ')?$';
-	my $lineregexp = qr/$lineregexpstr/;
+	my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delimiters) . '(?:' . quotemeta($record_delimiter) . ')?$';
+	my $record_regexp = qr/$record_regexp_str/;
 
 =end comment
 
@@ -258,28 +258,28 @@ sub new{
 	my $layer = shift;
 	my $order = shift;
 	my $delimiter = shift;
-	my $indexshift = shift;
-	my $linedelimiter = shift;
+	my $index_shift = shift;
+	my $record_delimiter = shift;
 	my $escape = shift;
 	$package = ref $package || $package;
 	if(ref $filename eq 'HASH'){
 		$layer = $filename->{layer};
 		$order = $filename->{order};
 		$delimiter = $filename->{delimiter};
-		$indexshift = $filename->{indexshift};
-		$linedelimiter = $filename->{linedelimiter};
+		$index_shift = $filename->{index_shift};
+		$record_delimiter = $filename->{record_delimiter};
 		$escape = $filename->{escape};
 		$filename = $filename->{filename};
 	}
-	$indexshift = 0 unless $indexshift;
-	return unless $indexshift =~ /^\d+$/;
+	$index_shift = 0 unless $index_shift;
+	return unless $index_shift =~ /^\d+$/;
 	return bless {
 		filename => $filename,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
-		indexshift => $indexshift,
-		linedelimiter => $linedelimiter,
+		index_shift => $index_shift,
+		record_delimiter => $record_delimiter,
 		escape => $escape
 	},$package;
 }
@@ -313,27 +313,27 @@ Fail > first: false (return;)
 
 sub add_data_last{
 	my $self = shift;
-	my $datalist = shift;
+	my $data_list = shift;
 	my $fh = shift;
 	my $fhflag = shift;
-	$datalist = [$datalist] if ref $datalist eq 'HASH';
-	my $datanum;
-	($datanum,$fh) = $self->read_data_num($fh,1);
-	return $self->add_data($datalist,$datanum + 1,$fh,$fhflag);
+	$data_list = [$data_list] if ref $data_list eq 'HASH';
+	my $data_num;
+	($data_num,$fh) = $self->read_data_num($fh,1);
+	return $self->add_data($data_list,$data_num + 1,$fh,$fhflag);
 }
 
 =head3 add_data()
 
 This method adds data records to the data file.
 
-	$cc->add_data($datalist,$startindex,$fh,$fhflag);
+	$cc->add_data($data_list,$start_index,$fh,$fhflag);
 
-	my $datalist = {title => "hoge",value => "huga"} || [
+	my $data_list = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
 	]; # hash reference of single data record or array reference of hash references of multiple data records
-	my $startindex = 12; # first index of the data record (can omit if you don't want index numbers)
+	my $start_index = 12; # first index of the data record (can omit if you don't want index numbers)
 	my $fh; # file handle (can omit)
 	my $fhflag = 1; # if true, file handle will not be closed (can omit)
 
@@ -349,18 +349,18 @@ Fail > first: false (return;)
 
 sub add_data{
 	my $self = shift;
-	my $datalist = shift;
-	my $startindex = shift;
+	my $data_list = shift;
+	my $start_index = shift;
 	my $fh = shift;
 	my $fhflag = shift;
-	$datalist = [$datalist] if ref $datalist eq 'HASH';
+	$data_list = [$data_list] if ref $data_list eq 'HASH';
 	unless(ref $fh eq 'GLOB'){
 		my $layer = $self->_layer();
 		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
 		flock $fh,2;
 		seek $fh,0,2;
 	}
-	$self->_write_order($fh,$datalist,$startindex);
+	$self->_write_order($fh,$data_list,$start_index);
 	close $fh unless $fhflag;
 	return $fhflag ? (1,$fh) : 1;
 }
@@ -370,19 +370,19 @@ sub add_data{
 This method writes data records to the data file.
 Before writing data, the contents of the data file will be erased.
 
-	$cc->write_data($datalist,$fh,$fhflag,$noempty);
+	$cc->write_data($data_list,$fh,$fhflag,$no_empty);
 
-	my $datalist = [
+	my $data_list = [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
 	]; # array reference of hash references of multiple data records
 	my $fh; # file handle (can omit)
 	my $fhflag = 1; # if true, file handle will not be closed (can omit)
-	my $noempty = 1; # see below
+	my $no_empty = 1; # see below
 
 If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle.
-If C<$noempty> is true, the contents of the data file will not be erased, and writes data from the place current file pointer points not from the head of file.
+If C<$no_empty> is true, the contents of the data file will not be erased, and writes data from the place current file pointer points not from the head of file.
 
 Return value:
 
@@ -394,22 +394,22 @@ Fail > first: false (return;)
 
 sub write_data{
 	my $self = shift;
-	my $datalist = shift;
+	my $data_list = shift;
 	my $fh = shift;
 	my $fhflag = shift;
-	my $noempty = shift;
-	$datalist = [@{$datalist}]; # escape destructive operation
-	splice @$datalist,0,$self->{indexshift};
+	my $no_empty = shift;
+	$data_list = [@{$data_list}]; # escape destructive operation
+	splice @$data_list,0,$self->{index_shift};
 	unless(ref $fh eq 'GLOB'){
 		my $layer = $self->_layer();
 		open $fh,'+<'.$layer,$self->{filename} or open $fh,'>'.$layer,$self->{filename} or return;
 		flock $fh,2;
 	}
-	unless($noempty){
+	unless($no_empty){
 		truncate $fh,0;
 		seek $fh,0,0;
 	}
-	return $self->add_data($datalist,$self->{indexshift},$fh,$fhflag);
+	return $self->add_data($data_list,$self->{index_shift},$fh,$fhflag);
 }
 
 =begin comment
@@ -418,14 +418,14 @@ sub write_data{
 
 範囲内のデータをファイルに書き出す。
 
-	$cc->write_data_range($datalist,$startindex,$endindex,$fh,$fhflag);
+	$cc->write_data_range($data_list,$start_index,$endindex,$fh,$fhflag);
 
-	my $datalist = [
+	my $data_list = [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
 	];# 複数データの配列リファレンスのみ許される。
-	my $startindex = 2; # 書き出すデータリストの最初のインデックス。0番目のデータから書き出すなら省略可能。
+	my $start_index = 2; # 書き出すデータリストの最初のインデックス。0番目のデータから書き出すなら省略可能。
 	my $endindex = 10; # 書き出すデータリストの最後のインデックス。最後のデータまで書き出すなら省略可能。
 	my $fh; # 省略可能。ファイルハンドル。
 	my $fhflag = 1; # 真値を与えればファイルハンドルを維持する。
@@ -442,30 +442,30 @@ sub write_data{
 
 sub write_data_range{
 	my $self = shift;
-	my $datalist = shift;
-	my $startindex = shift;
+	my $data_list = shift;
+	my $start_index = shift;
 	my $endindex = shift;
 	my $fh = shift;
 	my $fhflag = shift;
-	$datalist = [@{$datalist}]; # escape destructive operation
-	if($startindex){
-		$startindex = $#$datalist + $startindex + 1 if $startindex < 0;
-		if($startindex > $#$datalist){
-			warn 'startindex is out of index range';
+	$data_list = [@{$data_list}]; # escape destructive operation
+	if($start_index){
+		$start_index = $#$data_list + $start_index + 1 if $start_index < 0;
+		if($start_index > $#$data_list){
+			warn 'start_index is out of index range';
 		}
 	}else{
-		$startindex = $self->{indexshift};
+		$start_index = $self->{index_shift};
 	}
-	splice @$datalist,0,$startindex > $self->{indexshift} ? $startindex : $self->{indexshift};
+	splice @$data_list,0,$start_index > $self->{index_shift} ? $start_index : $self->{index_shift};
 	if($endindex){
-		$endindex = $#$datalist + $endindex + 1 if $endindex < 0;
-		if($endindex > $#$datalist){
+		$endindex = $#$data_list + $endindex + 1 if $endindex < 0;
+		if($endindex > $#$data_list){
 			warn 'endindex is out of index range';
-		}elsif($endindex < $#$datalist){
-			splice @$datalist,$endindex + 1;
+		}elsif($endindex < $#$data_list){
+			splice @$data_list,$endindex + 1;
 		}
 	}
-	return $self->add_data($datalist,$startindex,$fh,$fhflag);
+	return $self->add_data($data_list,$start_index,$fh,$fhflag);
 }
 
 =end comment
@@ -501,18 +501,18 @@ sub read_data{
 		flock $fh,2;
 		seek $fh,0,0;
 	}
-	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
+	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
 	if($self->{delimiter}){
-		my $indexcolumn = -1;
+		my $index_column = -1;
 		my @key = @{$self->{order}};
 		for my $i (0..$#key){
-			if($key[$i] eq 1){$indexcolumn = $i;last;}
+			if($key[$i] eq 1){$index_column = $i;last;}
 		}
-		my $cnt = $self->{indexshift} - 1;
+		my $cnt = $self->{index_shift} - 1;
 		while(<$fh>){
 			chomp;
 			my @column = split /$self->{delimiter}/;
-			$indexcolumn >= 0 ? $cnt = $column[$indexcolumn] : $cnt++;
+			$index_column >= 0 ? $cnt = $column[$index_column] : $cnt++;
 			for my $i (0..$#column){
 				$data->[$cnt]->{$key[$i]} = $column[$i] unless $key[$i] eq '1';
 			}
@@ -520,17 +520,17 @@ sub read_data{
 	}else{
 		my @key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
 		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
-		my $lineregexpstr = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
-		my $lineregexp = qr/$lineregexpstr/;
-		my $indexcolumn = -1;
+		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
+		my $record_regexp = qr/$record_regexp_str/;
+		my $index_column = -1;
 		for my $i (0..$#key){
-			if($key[$i] eq 1){$indexcolumn = $i;last;}
+			if($key[$i] eq 1){$index_column = $i;last;}
 		}
-		my $cnt = $self->{indexshift} - 1;
+		my $cnt = $self->{index_shift} - 1;
 		while(<$fh>){
 			chomp;
-			my @column = /$lineregexp/;
-			$indexcolumn >= 0 ? $cnt = $column[$indexcolumn] : $cnt++;
+			my @column = /$record_regexp/;
+			$index_column >= 0 ? $cnt = $column[$index_column] : $cnt++;
 			for my $i (0..$#column){
 				$data->[$cnt]->{$key[$i]} = $column[$i] unless $key[$i] eq '1';
 			}
@@ -568,30 +568,30 @@ sub read_data_num{
 		flock $fh,2;
 		seek $fh,0,0;
 	}
-	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
-	my $datanum = $self->{indexshift} - 1;
+	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
+	my $data_num = $self->{index_shift} - 1;
 	if($self->{delimiter}){
-		my $indexcolumn = -1;
+		my $index_column = -1;
 		for my $i (0..$#{$self->{order}}){
-			if($self->{order}->[$i] eq 1){$indexcolumn = $i;last;}
+			if($self->{order}->[$i] eq 1){$index_column = $i;last;}
 		}
-		if($indexcolumn < 0){$datanum++ while <$fh>;}
-		else{$datanum = (split /$self->{delimiter}/)[$indexcolumn] while <$fh>;}
-		chomp $datanum;
+		if($index_column < 0){$data_num++ while <$fh>;}
+		else{$data_num = (split /$self->{delimiter}/)[$index_column] while <$fh>;}
+		chomp $data_num;
 	}else{
 		my @key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
 		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
-		my $lineregexpstr = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
-		my $lineregexp = qr/$lineregexpstr/;
-		my $indexcolumn = -1;
+		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
+		my $record_regexp = qr/$record_regexp_str/;
+		my $index_column = -1;
 		for my $i (0..$#key){
-			if($key[$i] eq 1){$indexcolumn = $i;last;}
+			if($key[$i] eq 1){$index_column = $i;last;}
 		}
-		if($indexcolumn < 0){$datanum++ while <$fh>;}
-		else{$datanum = (/$lineregexp/)[$indexcolumn] while <$fh>;}
+		if($index_column < 0){$data_num++ while <$fh>;}
+		else{$data_num = (/$record_regexp/)[$index_column] while <$fh>;}
 	}
 	close $fh unless $fhflag;
-	return $fhflag ? ($datanum,$fh) : $datanum;
+	return $fhflag ? ($data_num,$fh) : $data_num;
 }
 
 =begin comment
@@ -616,10 +616,10 @@ print join ' / ',$str2 =~ $reg,"\n";
 
 #=head3 _write_order()
 
-	$cc->_write_order($order,$delimiter,$linedelimiter);
+	$cc->_write_order($order,$delimiter,$record_delimiter);
 	$order = [1 title summary];
 	$delimiter = "\n";
-	$linedelimiter = "\n";
+	$record_delimiter = "\n";
 
 =end comment
 
@@ -630,12 +630,12 @@ sub _write_order{defined $_[0]->{delimiter} && $_[0]->{delimiter} ne '' ? goto &
 sub _write_order_has_delimiter{
 	my $self = shift;
 	my $fh = shift;
-	my $datalist = shift;
+	my $data_list = shift;
 	my $index = shift;
 	my $delimiter = $self->{delimiter};
 	my @order = @{$self->{order}};
-	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
-	for my $data (@$datalist){
+	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
+	for my $data (@$data_list){
 		print $fh (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @order),$/;
 		$index ++;
 	}
@@ -644,12 +644,12 @@ sub _write_order_has_delimiter{
 sub _write_order_no_delimiter{
 	my $self = shift;
 	my $fh = shift;
-	my $datalist = shift;
+	my $data_list = shift;
 	my $index = shift;
 	my $delimiter = $self->{delimiter};
 	my @order = @{$self->{order}};
-	local $/ = $self->{linedelimiter} if defined $self->{linedelimiter} && $self->{linedelimiter} ne '';
-	for my $data (@$datalist){
+	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
+	for my $data (@$data_list){
 		print $fh (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
 		$index ++;
 	}
@@ -674,7 +674,7 @@ This module is written in object-oriented style but treating data by naked array
 
 For example, if you want to delete 3,6 and 8th element in data list completely, the following code will be required.
 
-	splice @$datalist,$_,1 for sort {$b <=> $a} qw(3 6 8);
+	splice @$data_list,$_,1 for sort {$b <=> $a} qw(3 6 8);
 
 So, if you want more smart OO, it will be better to use another modules that wraps naked array or file handle in OO (such as Object::Array ... etc?), or create Config::Column::OO etc. which inherits this module and can use methods pop, shift, splice, delete, etc.
 
