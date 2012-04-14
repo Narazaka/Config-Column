@@ -531,47 +531,12 @@ sub read_data{
 		$file_handle = shift;
 		$keep_file_handle = shift;
 	}
-	my $data;
 	unless(ref $file_handle eq 'GLOB'){
 		open $file_handle,'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
 		flock $file_handle,2;
 		seek $file_handle,0,0;
 	}
-	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
-	if($self->{delimiter}){
-		my $index_column = -1;
-		my @key = @{$self->{order}};
-		for my $i (0..$#key){
-			if($key[$i] eq 1){$index_column = $i;last;}
-		}
-		my $cnt = $self->{index_shift} - 1;
-		while(<$file_handle>){
-			chomp;
-			my @column = split /$self->{delimiter}/;
-			$index_column >= 0 ? $cnt = $column[$index_column] : $cnt++;
-			for my $i (0..$#column){
-				$data->[$cnt]->{$key[$i]} = $column[$i] unless $key[$i] eq '1';
-			}
-		}
-	}else{
-		my @key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
-		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
-		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
-		my $record_regexp = qr/$record_regexp_str/;
-		my $index_column = -1;
-		for my $i (0..$#key){
-			if($key[$i] eq 1){$index_column = $i;last;}
-		}
-		my $cnt = $self->{index_shift} - 1;
-		while(<$file_handle>){
-			chomp;
-			my @column = /$record_regexp/;
-			$index_column >= 0 ? $cnt = $column[$index_column] : $cnt++;
-			for my $i (0..$#column){
-				$data->[$cnt]->{$key[$i]} = $column[$i] unless $key[$i] eq '1';
-			}
-		}
-	}
+	my $data = $self->_read_order($file_handle);
 	close $file_handle unless $keep_file_handle;
 	return $keep_file_handle ? ($data,$file_handle) : $data;
 }
@@ -668,9 +633,7 @@ print join ' / ',$str2 =~ $reg,"\n";
 
 =cut
 
-sub _write_order{defined $_[0]->{delimiter} && $_[0]->{delimiter} ne '' ? goto &_write_order_has_delimiter : goto &_write_order_no_delimiter}
-
-sub _write_order_has_delimiter{
+sub _write_order{
 	my $self = shift;
 	my $file_handle = shift;
 	my $data_list = shift;
@@ -678,24 +641,76 @@ sub _write_order_has_delimiter{
 	my $delimiter = $self->{delimiter};
 	my @order = @{$self->{order}};
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
-	for my $data (@$data_list){
-		print $file_handle (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @order),$/;
-		$index ++;
+	if(defined $self->{delimiter} && $self->{delimiter} ne ''){ # has delimiter
+		for my $data (@$data_list){
+			print $file_handle (join $delimiter,map {$_ eq 1 ? $index : defined $data->{$_} ? $data->{$_} : ''} @order),$/;
+			$index ++;
+		}
+	}else{ # no delimiter
+		for my $data (@$data_list){
+			print $file_handle (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
+			$index ++;
+		}
 	}
 }
 
-sub _write_order_no_delimiter{
+sub _read_order{
 	my $self = shift;
 	my $file_handle = shift;
-	my $data_list = shift;
-	my $index = shift;
-	my $delimiter = $self->{delimiter};
-	my @order = @{$self->{order}};
+	my @key;
+	my $record_regexp;
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
-	for my $data (@$data_list){
-		print $file_handle (map {$_ % 2 ? $order[$_] eq 1 ? $index : defined $data->{$order[$_]} ? $data->{$order[$_]} : '' : $order[$_]} (0..$#order)),$/;
-		$index ++;
+	my $d_mode;
+	if(defined $self->{delimiter} && $self->{delimiter} ne ''){ # has delimiter
+		$d_mode = 1;
+		@key = @{$self->{order}};
+	}else{ # no delimiter
+		$d_mode = 0;
+		@key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
+		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
+		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
+		$record_regexp = qr/$record_regexp_str/;
 	}
+	my $index_column = -1;
+	my $key_column = -1;
+	my @ref_column = 0..$#key;
+	for my $i (0..$#key){
+		if($key[$i] eq 1){
+			$index_column = $i;
+			last;
+		}elsif($key[$i] eq '0'){
+			$key_column = $i;
+			last;
+		}
+	}
+	my ($c,$k);
+	my $ik_mode;
+	if($key_column != -1){
+		splice @ref_column, $key_column, 1;
+		$ik_mode = 2;
+	}elsif($index_column != -1){
+		splice @ref_column, $index_column, 1;
+		$ik_mode = 1;
+	}else{
+		$c = $self->{index_shift} - 1;
+		$ik_mode = 0;
+	}
+	my $data;
+	while(<$file_handle>){
+		chomp;
+		my @column = $d_mode ? split /$self->{delimiter}/ : /$record_regexp/;
+		if($ik_mode == 2){
+			$k = $column[$key_column];
+			$data->{$k}->{$key[$_]} = $column[$_] for @ref_column;
+		}elsif($ik_mode == 1){
+			$c = $column[$index_column];
+			$data->[$c]->{$key[$_]} = $column[$_] for @ref_column;
+		}else{
+			$c++;
+			$data->[$c]->{$key[$_]} = $column[$_] for @ref_column;
+		}
+	}
+	return $data;
 }
 
 sub _layer{
