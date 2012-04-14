@@ -376,7 +376,7 @@ sub add_data{
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
 	unless(ref $file_handle eq 'GLOB'){
 		my $layer = $self->_layer();
-		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or return;
+		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
 		flock $file_handle,2;
 		seek $file_handle,0,2;
 	}
@@ -431,7 +431,7 @@ sub write_data{
 	splice @$data_list,0,$self->{index_shift};
 	unless(ref $file_handle eq 'GLOB'){
 		my $layer = $self->_layer();
-		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or return;
+		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
 		flock $file_handle,2;
 	}
 	unless($no_empty){
@@ -533,7 +533,7 @@ sub read_data{
 	}
 	my $data;
 	unless(ref $file_handle eq 'GLOB'){
-		open $file_handle,'+<'.$self->_layer(),$self->{file} or return;
+		open $file_handle,'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
 		flock $file_handle,2;
 		seek $file_handle,0,0;
 	}
@@ -607,7 +607,7 @@ sub read_data_num{
 		$keep_file_handle = shift;
 	}
 	unless(ref $file_handle eq 'GLOB'){
-		open $file_handle,'+<'.$self->_layer(),$self->{file} or return;
+		open $file_handle,'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
 		flock $file_handle,2;
 		seek $file_handle,0,0;
 	}
