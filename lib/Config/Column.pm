@@ -116,27 +116,27 @@ Two or more characters are permitted for C<$escape>, but if you want to use C<$e
 
 	{
 		# orthodox
-		my $escape = "\\";
-		my $delimiter = "\t";
-		my $line_delimiter = "\n";
+		$escape = "\\";
+		$delimiter = "\t";
+		$line_delimiter = "\n";
 	}
 	{
 		# long
-		my $escape = "--";
-		my $delimiter = "//";
-		my $line_delimiter = "||";
+		$escape = "--";
+		$delimiter = "//";
+		$line_delimiter = "||";
 	}
 	{
 		# delimiters are not part of $escape
-		my $escape = "aa";
-		my $delimiter = "aaaa";
-		my $line_delimiter = "\n";
+		$escape = "aa";
+		$delimiter = "aaaa";
+		$line_delimiter = "\n";
 	}
 	{
 		# FAIL: $delimiter is part of $escape
-		my $escape = "aaaa";
-		my $delimiter = "aa";
-		my $line_delimiter = "\n";
+		$escape = "aaaa";
+		$delimiter = "aa";
+		$line_delimiter = "\n";
 	}
 
 There is two types of definition of C<$order> and C<$delimiter> for 2 following case.
@@ -145,31 +145,41 @@ There is two types of definition of C<$order> and C<$delimiter> for 2 following 
 
 =item single delimiter (You must define delimiter.)
 
-	my $cc = Config::Column->new(
-		'./file.dat', # the data file path
-		'utf8', # character encoding of the data file or PerlIO layer
-		[qw(1 author id title date summary)], # the "order" [keys]
-		"\t", # You MUST define delimiter.
-		1, # first index for data list
-		"\n", # delimiter that separates data record
-		"\\" # escape character for delimiters
-	);
+	my $cc = Config::Column->new({
+		file => './file.dat', # the data file path
+		layer => 'utf8', # character encoding of the data file or PerlIO layer
+		order => [qw(1 author id title date summary)], # the "order" [keys]
+		delimiter => "\t", # You MUST define delimiter.
+		index_shift => 1, # first index for data list
+		record_delimiter => "\n", # delimiter that separates data record
+		escape => "\\" # escape character for delimiters
+	});
 
 In this case, "order" is names (hash keys) of each data column.
 
-It is for data formats such as tab/comma separated data.
+It is for data formats such as tab/comma separated data(TSV/CSV).
+
+=over
+
+=item C<[qw(1 subject date article)]>
+
+	1	This is the subject	2012/02/07	Article is there. HAHAHA!
+	2	Tab separated data	2012/02/07	Tab separated data is for only computers.
+	3	Escaping	2012/02/07	Tab\	is escaped by \
+
+=back
 
 =item multiple delimiters (Never define delimiter.)
 
-	my $cc = Config::Column->new(
-		'./file.dat', # the data file path
-		'utf8', # character encoding of the data file or PerlIO layer
-		[qw('' 1 ': ' author "\t" id "\t" title "\t" date "\t" summary)], # [delim key delim key ...]
-		undef, # NEVER define delimiter (or omit).
-		1, # first index for data list
-		"\n", # delimiter that separates data record
-		"\\" # escape character for delimiters
-	);
+	my $cc = Config::Column->new({
+		file => './file.dat', # the data file path
+		layer => 'utf8', # character encoding of the data file or PerlIO layer
+		order => ['' => 1 => ': ' => 'author' => "\t" => 'id' => "\t" => 'title' => "\t" => 'date' => "\t" => 'summary'], # [delim key delim key ...]
+		delimiter => undef, # NEVER define delimiter (or omit).
+		index_shift => 1, # first index for data list
+		record_delimiter => "\n", # delimiter that separates data record
+		escape => "\\" # escape character for delimiters
+	});
 
 In this case, "order" is names (hash keys) of each data column and delimiters.
 
