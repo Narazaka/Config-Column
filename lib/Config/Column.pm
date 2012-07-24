@@ -87,7 +87,7 @@ It manages only IO of that data list format and leaves data list manipulating to
 =head3 new()
 
 	my $cc = Config::Column->new(
-		$datafile, # the data file path
+		$file, # the data file path
 		$layer, # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)') 
 		$order, # the "order" (see below section) (ARRAY REFERENCE)
 		$delimiter, # delimiter that separates data column
@@ -99,7 +99,7 @@ It manages only IO of that data list format and leaves data list manipulating to
 or with names,
 
 	my $cc = Config::Column->new({
-		datafile => $datafile,
+		file => $file,
 		layer => $layer,
 		order => $order,
 		delimiter => $delimiter,
