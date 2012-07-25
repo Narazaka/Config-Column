@@ -319,7 +319,7 @@ sub new{
 		$file = undef;
 	}
 	$index_shift = 0 unless $index_shift;
-	die 'invalid index_shift (not integer)' unless (int $index_shift) eq $index_shift;
+	die 'invalid index_shift (not integer)' unless (int $index_shift) eq $index_shift && $index_shift > -1;
 	return bless {
 		file => $file,
 		layer => $layer,
