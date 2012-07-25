@@ -110,6 +110,8 @@ or with names,
 
 C<$cc> will be instance of Config::Column if new() has succeeded.
 
+=head4 Data file (C<$file>)
+
 C<$file> is the data file path or file handle such as \*STDIN.
 
 =over
@@ -122,12 +124,20 @@ File handle will be opened and closed at every timing of file operation by defau
 
 File handle will be kept over any file operation by default and you must close manually.
 
+You can seek file pointer (by the method which is independent of this module) and can read/write data from/to the place that file pointer points, not the head of file.
+
 =back
+
+=head4 IO layer (C<$layer>)
 
 C<$layer> is character encoding of the data file (will be converted to PerlIO layer string such as C<":encoding($layer)">) or PerlIO layer (ex. ':encoding(utf8)')
 
+=head4 Index shift (C<$index_shift>)
+
 C<$index_shift> is 0 or 1 in general.
 For example, if C<$index_shift == 1>, you can get first data record by accessing to C<< $data_list->[1] >>, and C<< $data_list->[0] >> is empty.
+
+=head4 Escaping (C<$escape>)
 
 If you have defined C<$escape>, the delimiter strings in the data list are automatically escaped.
 Two or more characters are permitted for C<$escape>, but if you want to use C<$escape>, delimiters should not be part of C<$escape>.
@@ -160,6 +170,8 @@ Two or more characters are permitted for C<$escape>, but if you want to use C<$e
 There is two types of definition of C<$order> and C<$delimiter> for 2 following case.
 
 =over
+
+=head4 Delimiters and Orders (C<$delimiter>,C<$order>,C<$record_delimiter>)
 
 =item single delimiter (You must define delimiter.)
 
@@ -222,7 +234,7 @@ It is for data formats such as ...
 
 =back
 
-=head4 Index column
+=head5 Index column
 
 The name "1" in C<$order> means the index of data records.
 
@@ -283,7 +295,7 @@ In case of multiple delimiters, C<$record_delimiter> is also compiled to regular
 sub new{
 	my $package = shift;
 	$package = ref $package || $package;
-	my ($file, $layer, $order, $delimiter, $index_shift, $record_delimiter, $escape);
+	my ($file, $file_handle, $layer, $order, $delimiter, $index_shift, $record_delimiter, $escape);
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
 		$file = $option->{file};
@@ -302,8 +314,12 @@ sub new{
 		$record_delimiter = shift;
 		$escape = shift;
 	}
+	if(ref $file eq 'GLOB'){
+		$file_handle = $file;
+		$file = undef;
+	}
 	$index_shift = 0 unless $index_shift;
-	die 'invalid index_shift (not number)' unless $index_shift =~ /^\d+$/;
+	die 'invalid index_shift (not integer)' unless (int $index_shift) eq $index_shift;
 	return bless {
 		file => $file,
 		layer => $layer,
@@ -311,34 +327,43 @@ sub new{
 		delimiter => $delimiter,
 		index_shift => $index_shift,
 		record_delimiter => $record_delimiter,
-		escape => $escape
+		escape => $escape,
+		file_handle => $file_handle
 	},$package;
 }
 
 =head2 Methods
 
-=head3 add_data_last()
+=head3 C<add_data_last($data [, $file_handle_mode])>
 
 This method adds data records to the data file after previous data in the file.
 Indexes of these data records are automatically setted by reading the data file before.
 
-	$cc->add_data_last($data,$file_handle,$keep_file_handle);
+	my $result = $cc->add_data_last($data,$file_handle_mode);
+	my $result = $cc->add_data_last({
+		data => $data,
+		file_handle_mode => $file_handle_mode # fhmode is same meaning
+	});
 
-	my $data = {title => "hoge",value => "huga"} || [
+=over
+
+=item Arguments
+
+C<$data> : Hash reference of single data record or array reference of hash references of multiple data records.
+
+	$data = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
-	]; # hash reference of single data record or array reference of hash references of multiple data records
-	my $file_handle; # file handle (can omit)
-	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
+	];
 
-If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and adds data from the place current file pointer points not from the head of file.
+C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
-Return value:
+=item Return values
 
-Succeed > first: 1 , second: (if C<$keep_file_handle> is true) file handle
+C<$result == (1 or false)> : Succeed => 1, Fail => false.
 
-Fail > first: false (return;)
+=back
 
 =cut
 
@@ -361,28 +386,38 @@ sub add_data_last{
 	return $self->add_data($data_list,$data_num + 1,$file_handle,$keep_file_handle);
 }
 
-=head3 add_data()
+=head3 C<add_data($data_list [, $start_index ,$file_handle_mode])>
 
 This method adds data records to the data file.
 
-	$cc->add_data($data_list,$start_index,$file_handle,$keep_file_handle);
+	my $result = $cc->add_data($data_list,$start_index,$file_handle_mode);
+	my $result = $cc->add_data({
+		data => $data,
+		start_index => $start_index,
+		file_handle_mode => $file_handle_mode # fhmode is same meaning
+	});
 
-	my $data_list = {title => "hoge",value => "huga"} || [
+=over
+
+=item Arguments
+
+C<$data> : Hash reference of single data record or array reference of hash references of multiple data records.
+
+	$data = {title => "hoge",value => "huga"} || [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
-	]; # hash reference of single data record or array reference of hash references of multiple data records
-	my $start_index = 12; # first index of the data record (can omit if you don't want index numbers)
-	my $file_handle; # file handle (can omit)
-	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
+	];
 
-If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and adds data from the place current file pointer points not from the head of file.
+C<$start_index = NUMBER> : First index of the data record. (can omit if you don't want index numbers)
 
-Return value:
+C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
-Succeed > first: 1 , second: (if C<$keep_file_handle> is true) file handle
+=item Return values
 
-Fail > first: false (return;)
+C<$result == (1 or false)> : Succeed => 1, Fail => false.
+
+=back
 
 =cut
 
@@ -413,30 +448,39 @@ sub add_data{
 	return $keep_file_handle ? (1,$file_handle) : 1;
 }
 
-=head3 write_data()
+=head3 C<write_data($data_list [, $file_handle_mode, $no_empty])>
 
 This method writes data records to the data file.
 Before writing data, the contents of the data file will be erased.
 
-	$cc->write_data($data_list,$file_handle,$keep_file_handle,$no_empty);
+	my $result = $cc->write_data($data_list,$file_handle_mode,$no_empty);
+	my $result = $cc->write_data({
+		data => $data,
+		file_handle_mode => $file_handle_mode, # fhmode is same meaning
+		no_empty => $no_empty # noempty is same meaning
+	});
 
-	my $data_list = [
+=over
+
+=item Arguments
+
+C<$data_list> : Array reference of hash references of multiple data records.
+
+	$data_list = [
 		{title => "hoge",value => "huga"},
 		{title => "hoge2",value => "huga"},
 		{title => "hoge3",value => "huga"},
-	]; # array reference of hash references of multiple data records
-	my $file_handle; # file handle (can omit)
-	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
-	my $no_empty = 1; # see below
+	];
 
-If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle.
-If C<$no_empty> is true, the contents of the data file will not be erased, and writes data from the place current file pointer points not from the head of file.
+C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
-Return value:
+C<$no_empty = (1 or false)> : If it is true, the contents of the data file will not be erased, and writes data from the place current file pointer points not from the head of file.
 
-Succeed > first: 1 , second: (if C<$keep_file_handle> is true) file handle
+=item Return values
 
-Fail > first: false (return;)
+C<$result == (1 or false)> : Succeed => 1, Fail => false.
+
+=back
 
 =cut
 
@@ -529,22 +573,33 @@ sub write_data_range{
 
 =cut
 
-=head3 read_data()
+=head3 C<read_data([$file_handle_mode])>
 
 This method reads data records from the data file.
 
-	$cc->read_data($file_handle,$keep_file_handle);
+	my $data_list = $cc->read_data($file_handle_mode);
+	my $data_list = $cc->read_data({
+		file_handle_mode => $file_handle_mode # fhmode is same meaning
+	});
 
-	my $file_handle; # file handle (can omit)
-	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
 
-If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and reads data from the place current file pointer points not from the head of file.
+=over
 
-Return value:
+=item Arguments
 
-Succeed > first: data list (array reference of hash references) , second: (if C<$keep_file_handle> is true) file handle
+C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
-Fail > first: false (return;)
+=item Return values
+
+C<$data_list> : Succeed => Data list in file (array reference of hash references), Fail => false
+
+	$data_list = [
+		{title => "hoge",value => "huga"},
+		{title => "hoge2",value => "huga"},
+		{title => "hoge3",value => "huga"},
+	];
+
+=back
 
 =cut
 
@@ -569,22 +624,26 @@ sub read_data{
 	return $keep_file_handle ? ($data,$file_handle) : $data;
 }
 
-=head3 read_data_num()
+=head3 C<read_data_num([$file_handle_mode])>
 
 This method reads data record's last index number from the data file.
 
-	$cc->read_data_num($file_handle,$keep_file_handle);
+	my $last_index = $cc->read_data_num($file_handle_mode);
+	my $last_index = $cc->read_data_num({
+		file_handle_mode => $file_handle_mode # fhmode is same meaning
+	});
 
-	my $file_handle; # file handle (can omit)
-	my $keep_file_handle = 1; # if true, file handle will not be closed (can omit)
+=over
 
-If you give a file handle to the argument, file that defined by constructor is omitted and this method uses given file handle and reads data from the place current file pointer points not from the head of file.
+=item Arguments
 
-Return value:
+C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
-Succeed > first: last index , second: (if C<$keep_file_handle> is true) file handle
+=item Return values
 
-Fail > first: false (return;)
+C<$last_index == NUMBER> : Succeed => Last index of data list in file, Fail => false
+
+=back
 
 =cut
 
@@ -631,6 +690,7 @@ sub read_data_num{
 }
 
 =begin comment
+
 ### escaping read
 my $esc = '   ';
 my $escreg = quotemeta $esc;
@@ -646,16 +706,6 @@ $reg = qr/$delimreg((?:$escreg$escreg|$escreg$delimreg|[^$delimreg])*)$delimreg/
 print $reg,"\n";
 print join ' / ',$str1 =~ $reg,"\n";
 print join ' / ',$str2 =~ $reg,"\n";
-=end comment
-
-=begin comment
-
-#=head3 _write_order()
-
-	$cc->_write_order($order,$delimiter,$record_delimiter);
-	$order = [1 title summary];
-	$delimiter = "\n";
-	$record_delimiter = "\n";
 
 =end comment
 
@@ -750,7 +800,7 @@ sub _layer{
 
 =head1 DEPENDENCIES
 
-This module requires no other modules and libraries.
+This module requires no other modules and libraries (core module ExtUtils::MakeMaker is required when you use cpan or make to install).
 
 =head1 NOTES
 
@@ -766,12 +816,18 @@ So, if you want more smart OO, it will be better to use another modules that wra
 
 =head2 escaping
 
-I think current implement of the regexp of escaping (includes slow (..|..|..)) is not the best.
+I think current implement of the regexp of escaping (includes slow C<(..|..|..)>) is not the best.
 
 =head2 For legacy system
 
 Perl <= 5.6.x does not have PerlIO.
-C<$layer> of this module is for character encoding and depends on PerlIO, so you should empty C<$layer> on Perl 5.6.x or older
+C<$layer> of this module is for character encoding and depends on PerlIO, so you should empty C<$layer> on Perl 5.6.x or older.
+
+=head2 Compatibillity
+
+This is Config::Column 2 and not compatible with Config::Column 1.00 by some points(mostly, file handle treatment and related arguments).
+
+Features of file handle and its flag arguments of most methods has been replaced to constructor(C<new()>)'s file argument and most methods' C<$file_handle_mode> argument.
 
 =head1 TODO
 
