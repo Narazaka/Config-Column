@@ -7,4 +7,4 @@ BEGIN{unshift @INC,$Bin.'/../lib';use_ok('Config::Column')};
 require $Bin.'/base.pl';
 our $set;
 
-can_ok('Config::Column', qw/new add_data_last add_data write_data read_data read_data_num _write_order _read_order/);
+can_ok('Config::Column', qw/new add_data_last add_data write_data read_data read_data_num _write_order _read_order _layer/);
