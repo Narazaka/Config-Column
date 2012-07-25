@@ -657,20 +657,20 @@ C<$last_index == NUMBER> : Succeed => Last index of data list in file, Fail => f
 
 sub read_data_num{
 	my $self = shift;
-	my ($file_handle, $keep_file_handle);
+	my $file_handle_mode;
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
-		$file_handle = $option->{file_handle} || $option->{fh};
-		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
 	}else{
-		$file_handle = shift;
-		$keep_file_handle = shift;
+		$file_handle_mode = shift;
 	}
-	unless(ref $file_handle eq 'GLOB'){
-		open $file_handle,'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $file_handle,2;
-		seek $file_handle,0,0;
+	unless(ref $self->{file_handle} eq 'GLOB'){
+		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
+		open $self->{file_handle},'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
+		flock $self->{file_handle},2;
+		seek $self->{file_handle},0,0;
 	}
+	my $file_handle = $self->{file_handle};
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
 	my $data_num = $self->{index_shift} - 1;
 	if($self->{delimiter}){
@@ -693,8 +693,15 @@ sub read_data_num{
 		if($index_column < 0){$data_num++ while <$file_handle>;}
 		else{$data_num = (/$record_regexp/)[$index_column] while <$file_handle>;}
 	}
-	close $file_handle unless $keep_file_handle;
-	return $keep_file_handle ? ($data_num,$file_handle) : $data_num;
+	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
+	if($file_handle_mode eq 'close'){
+		close $self->{file_handle};
+		undef $self->{file_handle};
+	}elsif($file_handle_mode ne 'keep'){
+		close $self->{file_handle};
+		die 'file handle mode is invalid / closing file handle';
+	}
+	return $data_num;
 }
 
 =begin comment
