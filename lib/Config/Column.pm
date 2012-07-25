@@ -439,7 +439,7 @@ sub add_data{
 		flock $self->{file_handle},2;
 		seek $self->{file_handle},0,2;
 	}
-	$self->_write_order($self->{file_handle},$data_list,$start_index);
+	$self->_write_order($data_list,$start_index);
 	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
 	if($file_handle_mode eq 'close'){
 		close $self->{file_handle};
@@ -714,9 +714,9 @@ print join ' / ',$str2 =~ $reg,"\n";
 
 sub _write_order{
 	my $self = shift;
-	my $file_handle = shift;
 	my $data_list = shift;
 	my $index = shift;
+	my $file_handle = $self->{file_handle};
 	my $delimiter = $self->{delimiter};
 	my @order = @{$self->{order}};
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
