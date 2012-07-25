@@ -11,14 +11,36 @@ my $datafile = 'errorous';
 my $encoding = 'utf8';
 my $order = [qw(1 name subject date value mail url key host addr)];
 my $delimiter = "\t";
-my $cc0 = Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,42);
-isa_ok($cc0,'Config::Column','valid index');
-my $cc1 = eval{$cc0->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,-1)};
-isnt($@,'','invalid index');
-isnt(ref $cc1,'Config::Column','invalid index');
-my $cc2 = eval{$cc0->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,'宇宙')};
-isnt($@,'','invalid index');
-isnt(ref $cc2,'Config::Column','invalid index');
-my $cc3 = eval{Config::Column::new(undef,$FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,0)};
-is($@,'','invalid initialize');
-isnt(ref $cc3,'Config::Column','invalid initialize');
+{
+	my $cc = Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,42);
+	isa_ok($cc,'Config::Column','valid index');
+	my $cc1 = $cc->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,42);
+	isa_ok($cc1,'Config::Column','re bless');
+}
+{
+# can valid ?
+	my $cc = eval{Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,-1)};
+	isnt($@,'','invalid index');
+	isnt(ref $cc,'Config::Column','invalid index');
+}
+{
+# can valid
+	my $cc = eval{Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,'001')};
+	isnt($@,'','invalid index');
+	isnt(ref $cc,'Config::Column','invalid index');
+}
+{
+	my $cc = eval{Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,'42.195')};
+	isnt($@,'','invalid index');
+	isnt(ref $cc,'Config::Column','invalid index');
+}
+{
+	my $cc = eval{Config::Column->new($FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,'宇宙')};
+	isnt($@,'','invalid index');
+	isnt(ref $cc,'Config::Column','invalid index');
+}
+{
+	my $cc = eval{Config::Column::new(undef,$FindBin::Bin.'/'.$datafile,$encoding,$order,$delimiter,0)};
+	is($@,'','invalid initialize');
+	isnt(ref $cc,'Config::Column','invalid initialize');
+}
