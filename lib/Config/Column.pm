@@ -814,7 +814,7 @@ For example, if you want to delete 3,6 and 8th element in data list completely, 
 
 So, if you want more smart OO, it will be better to use another modules that wraps naked array or file handle in OO (such as Object::Array ... etc?), or create Config::Column::OO etc. which inherits this module and can use methods pop, shift, splice, delete, etc.
 
-=head2 escaping
+=head2 Escaping
 
 I think current implement of the regexp of escaping (includes slow C<(..|..|..)>) is not the best.
 
