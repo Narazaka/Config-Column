@@ -24,8 +24,8 @@ Config::Column - simply packages input and output of column oriented data files 
 	
 	# MAIN file instance
 	my $ccmain = Config::Column->new(
-		'mainfile.dat', # the data file path
-		'utf8', # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)') 
+		'mainfile.dat', # the data file path (or file handle such as \*STDIN)
+		'utf8', # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)')
 		$order_delim, # list of key names
 		$delimiter, # delimiter that separates data column
 		1, # first index for data list
@@ -87,8 +87,8 @@ It manages only IO of that data list format and leaves data list manipulating to
 =head3 new()
 
 	my $cc = Config::Column->new(
-		$file, # the data file path
-		$layer, # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)') 
+		$file, # the data file path (or file handle such as \*STDIN)
+		$layer, # character encoding of the data file (PerlIO ":encoding($layer)") or PerlIO layer (ex. ':encoding(utf8)')
 		$order, # the "order" (see below section) (ARRAY REFERENCE)
 		$delimiter, # delimiter that separates data column
 		$index_shift, # first index for data list (may be 0 or 1 || can omit, and use 0 as default) (Integer >= 0)
@@ -107,6 +107,24 @@ or with names,
 		record_delimiter => $record_delimiter,
 		escape => $escape
 	});
+
+C<$cc> will be instance of Config::Column if new() has succeeded.
+
+C<$file> is the data file path or file handle such as \*STDIN.
+
+=over
+
+=item If C<$file> is path string
+
+File handle will be opened and closed at every timing of file operation by default.
+
+=item If C<$file> is file handle
+
+File handle will be kept over any file operation by default and you must close manually.
+
+=back
+
+C<$layer> is character encoding of the data file (will be converted to PerlIO layer string such as C<":encoding($layer)">) or PerlIO layer (ex. ':encoding(utf8)')
 
 C<$index_shift> is 0 or 1 in general.
 For example, if C<$index_shift == 1>, you can get first data record by accessing to C<< $data_list->[1] >>, and C<< $data_list->[0] >> is empty.
@@ -268,7 +286,7 @@ sub new{
 	my ($file, $layer, $order, $delimiter, $index_shift, $record_delimiter, $escape);
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
-		$file = $option->{file} || $option->{file_name} || $option->{filename};
+		$file = $option->{file};
 		$layer = $option->{layer};
 		$order = $option->{order};
 		$delimiter = $option->{delimiter};
