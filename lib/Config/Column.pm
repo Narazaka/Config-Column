@@ -443,6 +443,7 @@ sub add_data{
 	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
 	if($file_handle_mode eq 'close'){
 		close $self->{file_handle};
+		undef $self->{file_handle};
 	}elsif($file_handle_mode ne 'keep'){
 		close $self->{file_handle};
 		die 'file handle mode is invalid / closing file handle';
@@ -606,23 +607,29 @@ C<$data_list> : Succeed => Data list in file (array reference of hash references
 
 sub read_data{
 	my $self = shift;
-	my ($file_handle, $keep_file_handle);
+	my $file_handle_mode;
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
-		$file_handle = $option->{file_handle} || $option->{fh};
-		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
 	}else{
-		$file_handle = shift;
-		$keep_file_handle = shift;
+		$file_handle_mode = shift;
 	}
-	unless(ref $file_handle eq 'GLOB'){
-		open $file_handle,'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $file_handle,2;
-		seek $file_handle,0,0;
+	unless(ref $self->{file_handle} eq 'GLOB'){
+		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
+		open $self->{file_handle},'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
+		flock $self->{file_handle},2;
+		seek $self->{file_handle},0,0;
 	}
-	my $data = $self->_read_order($file_handle);
-	close $file_handle unless $keep_file_handle;
-	return $keep_file_handle ? ($data,$file_handle) : $data;
+	my $data = $self->_read_order();
+	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
+	if($file_handle_mode eq 'close'){
+		close $self->{file_handle};
+		undef $self->{file_handle};
+	}elsif($file_handle_mode ne 'keep'){
+		close $self->{file_handle};
+		die 'file handle mode is invalid / closing file handle';
+	}
+	return $data;
 }
 
 =head3 C<read_data_num([$file_handle_mode])>
@@ -735,16 +742,16 @@ sub _write_order{
 
 sub _read_order{
 	my $self = shift;
-	my $file_handle = shift;
+	my $file_handle = $self->{file_handle};
 	my @key;
 	my $record_regexp;
 	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
-	my $d_mode;
+	my $delimiter_mode;
 	if(defined $self->{delimiter} && $self->{delimiter} ne ''){ # has delimiter
-		$d_mode = 1;
+		$delimiter_mode = 1;
 		@key = @{$self->{order}};
 	}else{ # no delimiter
-		$d_mode = 0;
+		$delimiter_mode = 0;
 		@key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
 		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
 		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
@@ -777,7 +784,7 @@ sub _read_order{
 	my $data;
 	while(<$file_handle>){
 		chomp;
-		my @column = $d_mode ? split /$self->{delimiter}/ : /$record_regexp/;
+		my @column = $delimiter_mode ? split /$self->{delimiter}/ : /$record_regexp/;
 		if($ik_mode == 2){
 			$k = $column[$key_column];
 			$data->{$k}->{$key[$_]} = $column[$_] for @ref_column;
