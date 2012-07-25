@@ -167,11 +167,11 @@ Two or more characters are permitted for C<$escape>, but if you want to use C<$e
 		$line_delimiter = "\n";
 	}
 
+=head4 Delimiters and Orders (C<$delimiter>,C<$order>,C<$record_delimiter>)
+
 There is two types of definition of C<$order> and C<$delimiter> for 2 following case.
 
 =over
-
-=head4 Delimiters and Orders (C<$delimiter>,C<$order>,C<$record_delimiter>)
 
 =item single delimiter (You must define delimiter.)
 
@@ -234,7 +234,7 @@ It is for data formats such as ...
 
 =back
 
-=head5 Index column
+=head4 Index column
 
 The name "1" in C<$order> means the index of data records.
 
