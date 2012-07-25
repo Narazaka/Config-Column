@@ -341,7 +341,7 @@ Indexes of these data records are automatically setted by reading the data file 
 
 	my $result = $cc->add_data_last($data,$file_handle_mode);
 	my $result = $cc->add_data_last({
-		data => $data,
+		data => $data, # data_list is same meaning
 		file_handle_mode => $file_handle_mode # fhmode is same meaning
 	});
 
@@ -369,30 +369,27 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 
 sub add_data_last{
 	my $self = shift;
-	my ($data_list, $file_handle, $keep_file_handle);
-	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){
+	my ($data_list, $file_handle_mode);
+	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
 		my $option = shift;
-		$data_list = $option->{data_list};
-		$file_handle = $option->{file_handle} || $option->{fh};
-		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+		$data_list = $option->{data} || $option->{data_list};
+		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
 	}else{
 		$data_list = shift;
-		$file_handle = shift;
-		$keep_file_handle = shift;
+		$file_handle_mode = shift;
 	}
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
-	my $data_num;
-	($data_num,$file_handle) = $self->read_data_num($file_handle,1);
-	return $self->add_data($data_list,$data_num + 1,$file_handle,$keep_file_handle);
+	my $data_num = $self->read_data_num('keep');
+	return $self->add_data($data_list,$data_num + 1,$file_handle_mode);
 }
 
-=head3 C<add_data($data_list [, $start_index ,$file_handle_mode])>
+=head3 C<add_data($data [, $start_index ,$file_handle_mode])>
 
 This method adds data records to the data file.
 
-	my $result = $cc->add_data($data_list,$start_index,$file_handle_mode);
+	my $result = $cc->add_data($data,$start_index,$file_handle_mode);
 	my $result = $cc->add_data({
-		data => $data,
+		data => $data, # data_list is same meaning
 		start_index => $start_index,
 		file_handle_mode => $file_handle_mode # fhmode is same meaning
 	});
@@ -423,29 +420,34 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 
 sub add_data{
 	my $self = shift;
-	my ($data_list, $start_index, $file_handle, $keep_file_handle);
-	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){
+	my ($data_list, $start_index, $file_handle_mode);
+	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
 		my $option = shift;
-		$data_list = $option->{data_list};
+		$data_list = $option->{data} || $option->{data_list};
 		$start_index = $option->{start_index};
-		$file_handle = $option->{file_handle} || $option->{fh};
-		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
 	}else{
 		$data_list = shift;
 		$start_index = shift;
-		$file_handle = shift;
-		$keep_file_handle = shift;
+		$file_handle_mode = shift;
 	}
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
-	unless(ref $file_handle eq 'GLOB'){
+	unless(ref $self->{file_handle} eq 'GLOB'){
+		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
 		my $layer = $self->_layer();
-		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $file_handle,2;
-		seek $file_handle,0,2;
+		open $self->{file_handle},'+<'.$layer,$self->{file} or open $self->{file_handle},'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
+		flock $self->{file_handle},2;
+		seek $self->{file_handle},0,2;
 	}
-	$self->_write_order($file_handle,$data_list,$start_index);
-	close $file_handle unless $keep_file_handle;
-	return $keep_file_handle ? (1,$file_handle) : 1;
+	$self->_write_order($self->{file_handle},$data_list,$start_index);
+	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
+	if($file_handle_mode eq 'close'){
+		close $self->{file_handle};
+	}elsif($file_handle_mode ne 'keep'){
+		close $self->{file_handle};
+		die 'file handle mode is invalid / closing file handle';
+	}
+	return 1;
 }
 
 =head3 C<write_data($data_list [, $file_handle_mode, $no_empty])>
@@ -455,7 +457,7 @@ Before writing data, the contents of the data file will be erased.
 
 	my $result = $cc->write_data($data_list,$file_handle_mode,$no_empty);
 	my $result = $cc->write_data({
-		data => $data,
+		data_list => $data_list,
 		file_handle_mode => $file_handle_mode, # fhmode is same meaning
 		no_empty => $no_empty # noempty is same meaning
 	});
@@ -486,31 +488,30 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 
 sub write_data{
 	my $self = shift;
-	my ($data_list, $file_handle, $keep_file_handle, $no_empty);
+	my ($data_list, $file_handle_mode, $no_empty);
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
 		$data_list = $option->{data_list};
-		$file_handle = $option->{file_handle} || $option->{fh};
-		$keep_file_handle = $option->{keep_file_handle} || $option->{fhflag};
+		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
 		$no_empty = $option->{no_empty};
 	}else{
 		$data_list = shift;
-		$file_handle = shift;
-		$keep_file_handle = shift;
+		$file_handle_mode = shift;
 		$no_empty = shift;
 	}
 	$data_list = [@{$data_list}]; # escape destructive operation
 	splice @$data_list,0,$self->{index_shift};
-	unless(ref $file_handle eq 'GLOB'){
+	unless(ref $self->{file_handle} eq 'GLOB'){
+		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
 		my $layer = $self->_layer();
-		open $file_handle,'+<'.$layer,$self->{file} or open $file_handle,'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $file_handle,2;
+		open $self->{file_handle},'+<'.$layer,$self->{file} or open $self->{file_handle},'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
+		flock $self->{file_handle},2;
 	}
 	unless($no_empty){
-		truncate $file_handle,0;
-		seek $file_handle,0,0;
+		truncate $self->{file_handle},0;
+		seek $self->{file_handle},0,0;
 	}
-	return $self->add_data($data_list,$self->{index_shift},$file_handle,$keep_file_handle);
+	return $self->add_data($data_list,$self->{index_shift},$file_handle_mode);
 }
 
 =begin comment
