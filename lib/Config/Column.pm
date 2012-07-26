@@ -124,7 +124,7 @@ File handle will be opened and closed at every timing of file operation by defau
 
 File handle will be kept over any file operation by default and you must close manually.
 
-You can seek file pointer (by the method which is independent of this module) and can read/write data from/to the place that file pointer points, not the head of file.
+You can seek the file pointer (by the method which is independent of this module) and can read/write data from/to the place that the file pointer points, not from/to the top of the file or the end of the file (using no_seek and no_empty options).
 
 =back
 
@@ -334,15 +334,16 @@ sub new{
 
 =head2 Methods
 
-=head3 C<add_data_last($data [, $file_handle_mode])>
+=head3 C<add_data_last($data [, $file_handle_mode, $no_seek])>
 
 This method adds data records to the data file after previous data in the file.
 Indexes of these data records are automatically setted by reading the data file before.
 
-	my $result = $cc->add_data_last($data,$file_handle_mode);
+	my $result = $cc->add_data_last($data,$file_handle_mode,$no_seek);
 	my $result = $cc->add_data_last({
 		data => $data, # data_list is same meaning
-		file_handle_mode => $file_handle_mode # fhmode is same meaning
+		file_handle_mode => $file_handle_mode, # fhmode is same meaning
+		no_seek => $no_seek # noseek is same meaning
 	});
 
 =over
@@ -359,6 +360,8 @@ C<$data> : Hash reference of single data record or array reference of hash refer
 
 C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
+C<$no_seek = (1 or false)> : If it is true, it will not seek the file pointer, and writes data to the place that the file pointer now points, not to the end of file.
+
 =item Return values
 
 C<$result == (1 or false)> : Succeed => 1, Fail => false.
@@ -369,29 +372,36 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 
 sub add_data_last{
 	my $self = shift;
-	my ($data_list, $file_handle_mode);
+	my ($data_list, $file_handle_mode, $no_seek);
 	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
 		my $option = shift;
 		$data_list = $option->{data} || $option->{data_list};
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
+		$no_seek = $option->{no_seek} || $option->{noseek};
 	}else{
 		$data_list = shift;
 		$file_handle_mode = shift;
+		$no_seek = shift;
 	}
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
 	my $data_num = $self->read_data_num('keep');
-	return $self->add_data($data_list,$data_num + 1,$file_handle_mode);
+	$self->_open('write');
+	seek $self->{file_handle},0,2 unless $no_seek;
+	$self->_write_order($data_list,$data_num + 1);
+	$self->_close($file_handle_mode);
+	return 1;
 }
 
-=head3 C<add_data($data [, $start_index ,$file_handle_mode])>
+=head3 C<add_data($data [, $start_index, $file_handle_mode, $no_seek])>
 
 This method adds data records to the data file.
 
-	my $result = $cc->add_data($data,$start_index,$file_handle_mode);
+	my $result = $cc->add_data($data,$start_index,$file_handle_mode,$no_seek);
 	my $result = $cc->add_data({
 		data => $data, # data_list is same meaning
 		start_index => $start_index,
-		file_handle_mode => $file_handle_mode # fhmode is same meaning
+		file_handle_mode => $file_handle_mode, # fhmode is same meaning
+		no_seek => $no_seek # noseek is same meaning
 	});
 
 =over
@@ -410,6 +420,8 @@ C<$start_index = NUMBER> : First index of the data record. (can omit if you don'
 
 C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
+C<$no_seek = (1 or false)> : If it is true, it will not seek the file pointer, and writes data to the place that the file pointer now points, not to the end of file.
+
 =item Return values
 
 C<$result == (1 or false)> : Succeed => 1, Fail => false.
@@ -420,34 +432,24 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 
 sub add_data{
 	my $self = shift;
-	my ($data_list, $start_index, $file_handle_mode);
+	my ($data_list, $start_index, $file_handle_mode, $no_seek);
 	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
 		my $option = shift;
 		$data_list = $option->{data} || $option->{data_list};
 		$start_index = $option->{start_index};
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
+		$no_seek = $option->{no_seek} || $option->{noseek};
 	}else{
 		$data_list = shift;
 		$start_index = shift;
 		$file_handle_mode = shift;
+		$no_seek = shift;
 	}
 	$data_list = [$data_list] if ref $data_list eq 'HASH';
-	unless(ref $self->{file_handle} eq 'GLOB'){
-		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
-		my $layer = $self->_layer();
-		open $self->{file_handle},'+<'.$layer,$self->{file} or open $self->{file_handle},'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $self->{file_handle},2;
-		seek $self->{file_handle},0,2;
-	}
+	$self->_open('write');
+	seek $self->{file_handle},0,2 unless $no_seek;
 	$self->_write_order($data_list,$start_index);
-	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
-	if($file_handle_mode eq 'close'){
-		close $self->{file_handle};
-		undef $self->{file_handle};
-	}elsif($file_handle_mode ne 'keep'){
-		close $self->{file_handle};
-		die 'file handle mode is invalid / closing file handle';
-	}
+	$self->_close($file_handle_mode);
 	return 1;
 }
 
@@ -477,7 +479,7 @@ C<$data_list> : Array reference of hash references of multiple data records.
 
 C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
 
-C<$no_empty = (1 or false)> : If it is true, the contents of the data file will not be erased, and writes data from the place current file pointer points not from the head of file.
+C<$no_empty = (1 or false)> : If it is true, the contents of the data file will not be erased, and writes data to the place that the file pointer now points, not to the top of the file.
 
 =item Return values
 
@@ -494,25 +496,22 @@ sub write_data{
 		my $option = shift;
 		$data_list = $option->{data_list};
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
-		$no_empty = $option->{no_empty};
+		$no_empty = $option->{no_empty} || $option->{noempty};
 	}else{
 		$data_list = shift;
 		$file_handle_mode = shift;
 		$no_empty = shift;
 	}
 	$data_list = [@{$data_list}]; # escape destructive operation
-	splice @$data_list,0,$self->{index_shift};
-	unless(ref $self->{file_handle} eq 'GLOB'){
-		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
-		my $layer = $self->_layer();
-		open $self->{file_handle},'+<'.$layer,$self->{file} or open $self->{file_handle},'>'.$layer,$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $self->{file_handle},2;
-	}
+	splice @$data_list,0,$self->{index_shift}; # destructive operation
+	$self->_open('write');
 	unless($no_empty){
 		truncate $self->{file_handle},0;
 		seek $self->{file_handle},0,0;
 	}
-	return $self->add_data($data_list,$self->{index_shift},$file_handle_mode);
+	$self->_write_order($data_list,$self->{index_shift});
+	$self->_close($file_handle_mode);
+	return 1;
 }
 
 =begin comment
@@ -575,13 +574,14 @@ sub write_data_range{
 
 =cut
 
-=head3 C<read_data([$file_handle_mode])>
+=head3 C<read_data([$file_handle_mode, $no_seek])>
 
 This method reads data records from the data file.
 
-	my $data_list = $cc->read_data($file_handle_mode);
+	my $data_list = $cc->read_data($file_handle_mode,$no_seek);
 	my $data_list = $cc->read_data({
-		file_handle_mode => $file_handle_mode # fhmode is same meaning
+		file_handle_mode => $file_handle_mode, # fhmode is same meaning
+		no_seek => $no_seek # noseek is same meaning
 	});
 
 
@@ -590,6 +590,8 @@ This method reads data records from the data file.
 =item Arguments
 
 C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
+
+C<$no_seek = (1 or false)> : If it is true, it will not seek the file pointer, and reads data from the place that the file pointer now points, not from the top of file.
 
 =item Return values
 
@@ -607,38 +609,30 @@ C<$data_list> : Succeed => Data list in file (array reference of hash references
 
 sub read_data{
 	my $self = shift;
-	my $file_handle_mode;
+	my ($file_handle_mode, $no_seek);
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
+		$no_seek = $option->{no_seek} || $option->{noseek};
 	}else{
 		$file_handle_mode = shift;
+		$no_seek = shift;
 	}
-	unless(ref $self->{file_handle} eq 'GLOB'){
-		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
-		open $self->{file_handle},'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $self->{file_handle},2;
-		seek $self->{file_handle},0,0;
-	}
+	$self->_open('read');
+	seek $self->{file_handle},0,0 unless $no_seek;
 	my $data = $self->_read_order();
-	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
-	if($file_handle_mode eq 'close'){
-		close $self->{file_handle};
-		undef $self->{file_handle};
-	}elsif($file_handle_mode ne 'keep'){
-		close $self->{file_handle};
-		die 'file handle mode is invalid / closing file handle';
-	}
+	$self->_close($file_handle_mode);
 	return $data;
 }
 
-=head3 C<read_data_num([$file_handle_mode])>
+=head3 C<read_data_num([$file_handle_mode, $no_seek])>
 
 This method reads data record's last index number from the data file.
 
-	my $last_index = $cc->read_data_num($file_handle_mode);
+	my $last_index = $cc->read_data_num($file_handle_mode,$no_seek);
 	my $last_index = $cc->read_data_num({
-		file_handle_mode => $file_handle_mode # fhmode is same meaning
+		file_handle_mode => $file_handle_mode, # fhmode is same meaning
+		no_seek => $no_seek # noseek is same meaning
 	});
 
 =over
@@ -646,6 +640,8 @@ This method reads data record's last index number from the data file.
 =item Arguments
 
 C<$file_handle_mode = ('keep' or 'close')> : If you set it, file handle treatment will be changed from default(see new()). (can omit)
+
+C<$no_seek = (1 or false)> : If it is true, it will not seek the file pointer, and reads data from the place that the file pointer now points, not from the top of file.
 
 =item Return values
 
@@ -657,50 +653,19 @@ C<$last_index == NUMBER> : Succeed => Last index of data list in file, Fail => f
 
 sub read_data_num{
 	my $self = shift;
-	my $file_handle_mode;
+	my ($file_handle_mode, $no_seek);
 	if(ref $_[0] eq 'HASH'){
 		my $option = shift;
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
+		$no_seek = $option->{no_seek} || $option->{noseek};
 	}else{
 		$file_handle_mode = shift;
+		$no_seek = shift;
 	}
-	unless(ref $self->{file_handle} eq 'GLOB'){
-		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
-		open $self->{file_handle},'+<'.$self->_layer(),$self->{file} or die 'cannot open file [',$self->{file},']';
-		flock $self->{file_handle},2;
-		seek $self->{file_handle},0,0;
-	}
-	my $file_handle = $self->{file_handle};
-	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
-	my $data_num = $self->{index_shift} - 1;
-	if($self->{delimiter}){
-		my $index_column = -1;
-		for my $i (0..$#{$self->{order}}){
-			if($self->{order}->[$i] eq 1){$index_column = $i;last;}
-		}
-		if($index_column < 0){$data_num++ while <$file_handle>;}
-		else{$data_num = (split /$self->{delimiter}/)[$index_column] while <$file_handle>;}
-		chomp $data_num;
-	}else{
-		my @key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
-		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
-		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
-		my $record_regexp = qr/$record_regexp_str/;
-		my $index_column = -1;
-		for my $i (0..$#key){
-			if($key[$i] eq 1){$index_column = $i;last;}
-		}
-		if($index_column < 0){$data_num++ while <$file_handle>;}
-		else{$data_num = (/$record_regexp/)[$index_column] while <$file_handle>;}
-	}
-	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
-	if($file_handle_mode eq 'close'){
-		close $self->{file_handle};
-		undef $self->{file_handle};
-	}elsif($file_handle_mode ne 'keep'){
-		close $self->{file_handle};
-		die 'file handle mode is invalid / closing file handle';
-	}
+	$self->_open('read');
+	seek $self->{file_handle},0,0 unless $no_seek;
+	my $data_num = $self->_read_num_order();
+	$self->_close($file_handle_mode);
 	return $data_num;
 }
 
@@ -804,6 +769,64 @@ sub _read_order{
 		}
 	}
 	return $data;
+}
+
+sub _read_num_order{
+	my $self = shift;
+	my $file_handle = $self->{file_handle};
+	local $/ = $self->{record_delimiter} if defined $self->{record_delimiter} && $self->{record_delimiter} ne '';
+	my $data_num = $self->{index_shift} - 1;
+	if($self->{delimiter}){
+		my $index_column = -1;
+		for my $i (0..$#{$self->{order}}){
+			if($self->{order}->[$i] eq 1){$index_column = $i;last;}
+		}
+		if($index_column < 0){$data_num++ while <$file_handle>;}
+		else{$data_num = (split /$self->{delimiter}/)[$index_column] while <$file_handle>;}
+		chomp $data_num;
+	}else{
+		my @key = map { $_ % 2 ? $self->{order}->[$_] : () } (0..$#{$self->{order}});
+		my @delim = map { $_ % 2 ? () : $self->{order}->[$_] } (0..$#{$self->{order}});
+		my $record_regexp_str = '^'.(join '(.*?)',map {quotemeta} @delim) . '(?:' . quotemeta($/) . ')?$';
+		my $record_regexp = qr/$record_regexp_str/;
+		my $index_column = -1;
+		for my $i (0..$#key){
+			if($key[$i] eq 1){$index_column = $i;last;}
+		}
+		if($index_column < 0){$data_num++ while <$file_handle>;}
+		else{$data_num = (/$record_regexp/)[$index_column] while <$file_handle>;}
+	}
+	return $data_num;
+}
+
+sub _open{ # opened : 1, keeped : false, error : die
+	my $self = shift;
+	my $mode = shift;
+	if(ref $self->{file_handle} ne 'GLOB'){
+		die 'cannot open file because file name and file handle is invalid' unless defined $self->{file} && $self->{file} ne '';
+		my $layer = $self->_layer();
+		open $self->{file_handle},'+<'.$layer,$self->{file} or ($mode eq 'write' && open $self->{file_handle},'>'.$layer,$self->{file}) or die 'cannot open file [',$self->{file},']';
+		flock $self->{file_handle},2 or die 'cannot flock file [',$self->{file},']';
+		return 1;
+	}else{
+		return;
+	}
+}
+
+sub _close{ # closed : 1, keeped : false, other : die
+	my $self = shift;
+	my $file_handle_mode = shift;
+	$file_handle_mode = defined $self->{file} ? 'close' : 'keep' unless $file_handle_mode;
+	if($file_handle_mode eq 'close'){
+		close $self->{file_handle};
+		undef $self->{file_handle};
+		return 1;
+	}elsif($file_handle_mode ne 'keep'){
+		close $self->{file_handle};
+		die 'file handle mode is invalid / closing file handle';
+	}else{
+		return;
+	}
 }
 
 sub _layer{
