@@ -496,7 +496,7 @@ sub write_data{
 		my $option = shift;
 		$data_list = $option->{data_list};
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
-		$no_empty = $option->{no_empty} || $option->{noempty};
+		$no_empty = $option->{no_empty} || $option->{noempty} || $option->{no_seek} || $option->{noseek};
 	}else{
 		$data_list = shift;
 		$file_handle_mode = shift;
