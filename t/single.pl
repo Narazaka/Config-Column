@@ -197,6 +197,7 @@ sub add_data_last{
 	my $no_seek = shift;
 	my $like = shift;
 	my $str = shift;
+	my $result = shift;
 	eval{$cc->add_data_last($data_list, $file_handle_mode, $no_seek)};
 	$like ? like($@,$like,'add_data_last eval') : is($@,'','add_data_last eval');
 	my $option_sets = all_option_name_set(
@@ -217,24 +218,14 @@ sub add_data_last{
 		$like ? like($@,$like,'add_data_last eval') : is($@,'','add_data_last eval');
 #		warn Dumper $opt;
 	}
-	is(get_last($new_opt,($#$option_sets + 1)),$str x ($#$option_sets + 1),'add_data_last data compare');
+		is_deeply(get_last($cc,($#$option_sets + 1)),$result,'add_data_last data compare');
 }
 
 sub get_last{
-	my $new_opt = shift;
+	my $cc = shift;
 	my $n = shift;
-	my $cc = Config::Column->new($new_opt);
-	my $fh;
-	if(defined $new_opt->{file} && $new_opt->{file} ne ''){
-		open $fh,'<'.$cc->_layer(),$new_opt->{file};
-		flock $fh,1;
-	}
-	local $/ = $new_opt->{record_delimiter} if defined $new_opt->{record_delimiter} && $new_opt->{record_delimiter} ne '';
-	my @lines = <$fh>;
-	if(defined $new_opt->{file} && $new_opt->{file} ne ''){
-		close $fh;
-	}
-	return join '',map {$lines[$_]} ($#lines - $n + 1) .. $#lines;
+	return $cc->read_data();
+	#return join '',map {$lines[$_]} ($#lines - $n + 1) .. $#lines;
 }
 
 1;

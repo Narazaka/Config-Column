@@ -12,19 +12,25 @@ require $Bin.'/single.pl';
 use Data::Dumper;
 #Config::Column::Test::Single::new_options('valid',sub{print Dumper shift});
 #print "---"x10,"\n";
-	Config::Column::Test::Single::add_data_last(
-		{
-			file=>'aa.txt',
-			index_shift=>0,
-			order=>[qw/a b/],
-			delimiter=>"\t"
-		},
+open my $fh,'>', $Bin.'/ssss.txt';
+close $fh;
+Config::Column::Test::Single::add_data_last(
+	{
+		file=>$Bin.'/ssss.txt',
+		index_shift=>0,
+		order=>[qw/a b/],
+		delimiter=>"\t"
+	},
 #		[{a=>1,b=>10},{a=>2,b=>20},{a=>3,b=>30}],
-		[{a=>1,b=>10}],
-		undef,
-		undef,
-		undef,
-		"1\t10\n"
-	);
+	[{a=>1,b=>10}],
+	'keep',
+	undef,
+	undef,
+	"1\t10\n",
+	[{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10},{a=>1,b=>10}]
+);
+close $fh;
+
+unlink $Bin.'/ssss.txt';
 
 done_testing;
