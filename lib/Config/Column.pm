@@ -373,7 +373,7 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 sub add_data_last{
 	my $self = shift;
 	my ($data_list, $file_handle_mode, $no_seek);
-	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
+	if(ref $_[0] eq 'HASH' && (ref $_[0]->{data} || ref $_[0]->{data_list})){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
 		my $option = shift;
 		$data_list = $option->{data} || $option->{data_list};
 		$file_handle_mode = $option->{file_handle_mode} || $option->{fhmode};
@@ -433,7 +433,7 @@ C<$result == (1 or false)> : Succeed => 1, Fail => false.
 sub add_data{
 	my $self = shift;
 	my ($data_list, $start_index, $file_handle_mode, $no_seek);
-	if(ref $_[0] eq 'HASH' && ref $_[0]->{data_list}){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
+	if(ref $_[0] eq 'HASH' && (ref $_[0]->{data} || ref $_[0]->{data_list})){ # ref $_[0]->{data_list} can omit data record such as {data_list => 'aaa'}
 		my $option = shift;
 		$data_list = $option->{data} || $option->{data_list};
 		$start_index = $option->{start_index};
